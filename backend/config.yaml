@@ -8,3 +8,26 @@ llm:
 
 content_type:
   song_max_words: 5       # heuristic: segments with <= N words may be song lyrics
+
+indictrans2:
+  model: ai4bharat/indictrans2-indic-en-dist-200M
+  batch_size: 8
+  max_length: 256
+  glossary_postprocess: true
+  fallback_provider: openrouter   # used when model not available
+
+rag:
+  embedder: all-MiniLM-L6-v2
+  embed_dim: 384
+  rrf_k: 60
+  top_k_search: 20
+  top_k_ask: 5
+  chunk_min_words: 80
+  chunk_target_words: 250
+  chunk_max_words: 500
+  chunk_similarity_threshold: 0.85
+  generation_model: openrouter/anthropic/claude-3-haiku
+  generation_max_tokens: 1024
+  hnsw_m: 16
+  hnsw_ef_construction: 200
+  hnsw_ef_search: 40

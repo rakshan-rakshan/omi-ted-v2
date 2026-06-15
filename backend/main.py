@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv(Path(__file__).parent / ".env")
 
-from routers import health, ingest, videos, export, batch, stats, settings_api, glossary
+from routers import health, ingest, videos, export, batch, stats, settings_api, glossary, search, eval
 
 app = FastAPI(
     title="OMI-TED v2",
@@ -39,3 +39,5 @@ app.include_router(batch.router,        prefix="/api/v1",        tags=["batch"])
 app.include_router(stats.router,        prefix="/api/v1",        tags=["stats"])
 app.include_router(settings_api.router, prefix="/api/v1",        tags=["settings"])
 app.include_router(glossary.router,     prefix="/api/v1",        tags=["glossary"])
+app.include_router(search.router,                                     tags=["search"])
+app.include_router(eval.router,                                       tags=["eval"])

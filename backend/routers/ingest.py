@@ -47,6 +47,17 @@ class JobStatusResponse(BaseModel):
     finished_at: str | None = None
 
 
+class BatchImportRequest(BaseModel):
+    youtube_ids: list[str]
+
+
+class BatchImportResponse(BaseModel):
+    total: int
+    queued: int
+    already_fetched: int
+    jobs: list[IngestResponse]
+
+
 # ---------------------------------------------------------------------------
 # Background task
 # ---------------------------------------------------------------------------
@@ -92,8 +103,9 @@ async def _run_ingest(video_id: int, job_id: int) -> None:
             await session.execute(sa_delete(Segment).where(Segment.video_id == video_id))
 
             # Write segments
+            seg_objects = []
             for idx, seg in enumerate(data.segments):
-                session.add(Segment(
+                obj = Segment(
                     video_id=video_id,
                     segment_index=idx,
                     start_time=seg.start_time,
@@ -104,7 +116,16 @@ async def _run_ingest(video_id: int, job_id: int) -> None:
                     en_final=seg.en_auto,   # en_final = en_human if set, else en_auto
                     content_type="unknown",
                     is_reviewed=False,
-                ))
+                )
+                session.add(obj)
+                seg_objects.append(obj)
+
+            # Classify content types (song/prayer/sermon)
+            from services.song_detector import classify_segments
+            seg_data = [{"index": s.segment_index, "text": s.te_original} for s in seg_objects]
+            content_types = classify_segments(seg_data)
+            for s, ct in zip(seg_objects, content_types):
+                s.content_type = ct
 
             video.status    = "fetched"
             video.fetched_at = datetime.now(timezone.utc)
@@ -201,4 +222,55 @@ async def get_job_status(
         error_msg=job.error_msg,
         started_at=job.started_at.isoformat() if job.started_at else None,
         finished_at=job.finished_at.isoformat() if job.finished_at else None,
+    )
+
+
+@router.post("/batch", response_model=BatchImportResponse)
+async def batch_import(
+    body: BatchImportRequest,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+) -> BatchImportResponse:
+    """
+    Import multiple videos at once. Accepts a list of YouTube IDs.
+    Returns a summary with job IDs for each queued video.
+    """
+    ids = list(dict.fromkeys([i.strip() for i in body.youtube_ids if i.strip()]))
+    queued = 0
+    already = 0
+    jobs = []
+
+    for yt_id in ids:
+        result = await session.execute(
+            select(Video).where(Video.youtube_id == yt_id)
+        )
+        existing = result.scalar_one_or_none()
+
+        if existing and existing.status == "fetched":
+            already += 1
+            continue
+
+        if existing is None:
+            video = Video(youtube_id=yt_id, status="pending")
+            session.add(video)
+            await session.flush()
+        else:
+            video = existing
+            video.status = "pending"
+
+        job = Job(video_id=video.id, status="queued")
+        session.add(job)
+        await session.commit()
+        await session.refresh(job)
+
+        background_tasks.add_task(_run_ingest, video.id, job.id)
+        queued += 1
+        jobs.append(IngestResponse(
+            job_id=job.id, video_id=video.id,
+            status="queued", message=f"Ingestion queued for {yt_id}.",
+        ))
+
+    return BatchImportResponse(
+        total=len(ids), queued=queued,
+        already_fetched=already, jobs=jobs,
     )

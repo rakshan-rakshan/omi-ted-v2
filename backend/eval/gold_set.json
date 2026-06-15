@@ -1,0 +1,182 @@
+[
+  {
+    "id": 1,
+    "question": "What does the Bible say about faith?",
+    "expected_answer": "Answers should reference sermon segments discussing faith, citing specific verses.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 2,
+    "question": "Explain the concept of grace in Christianity",
+    "expected_answer": "Answers should discuss grace as unmerited favor from God, with biblical references.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 3,
+    "question": "What did Jesus teach about prayer?",
+    "expected_answer": "Answers should reference Jesus's teachings on prayer from sermon context.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 4,
+    "question": "How should Christians handle suffering?",
+    "expected_answer": "Answers should reference biblical perspectives on suffering and trials.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 5,
+    "question": "What is the role of the Holy Spirit?",
+    "expected_answer": "Answers should discuss the Holy Spirit's role in guidance, comfort, and sanctification.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 6,
+    "question": "What does the Bible teach about salvation?",
+    "expected_answer": "Answers should explain salvation through faith in Christ, repentance, and redemption.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 7,
+    "question": "How does the Bible define love?",
+    "expected_answer": "Answers should reference 1 Corinthians 13 and Jesus's commands to love God and neighbor.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 8,
+    "question": "What is biblical forgiveness?",
+    "expected_answer": "Answers should discuss forgiveness as both receiving God's pardon and extending it to others.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 9,
+    "question": "What is the Christian hope?",
+    "expected_answer": "Answers should discuss hope in Christ's return, eternal life, and God's promises.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 10,
+    "question": "Explain the doctrine of redemption",
+    "expected_answer": "Answers should discuss Christ's payment for sin, freeing believers from bondage.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 11,
+    "question": "What is sanctification?",
+    "expected_answer": "Answers should describe the process of being made holy through the Spirit and God's Word.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 12,
+    "question": "What is true worship?",
+    "expected_answer": "Answers should discuss worship as both lifestyle and gathered expression of praise to God.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 13,
+    "question": "What is the meaning of communion?",
+    "expected_answer": "Answers should explain the Lord's Supper as remembrance of Christ's sacrifice.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 14,
+    "question": "What is Christian baptism?",
+    "expected_answer": "Answers should describe baptism as public declaration of faith and identification with Christ.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 15,
+    "question": "What are spiritual gifts?",
+    "expected_answer": "Answers should list and explain gifts given by the Spirit for building up the church.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 16,
+    "question": "What is the church?",
+    "expected_answer": "Answers should describe the church as the body of Christ, both universal and local.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 17,
+    "question": "What does the Bible say about the second coming?",
+    "expected_answer": "Answers should discuss Christ's promised return, judgment, and the renewal of all things.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 18,
+    "question": "What does the Bible teach about creation?",
+    "expected_answer": "Answers should reference God as Creator of heaven and earth, and humanity made in His image.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 19,
+    "question": "What is a covenant?",
+    "expected_answer": "Answers should explain God's covenant relationship with His people, old and new covenants.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 20,
+    "question": "What is biblical prophecy?",
+    "expected_answer": "Answers should discuss prophecy as God's message through prophets, including foretelling and forthtelling.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 21,
+    "question": "What is wisdom according to the Bible?",
+    "expected_answer": "Answers should discuss wisdom as fearing God, found in Proverbs and the teachings of Christ.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 22,
+    "question": "What is Christian joy?",
+    "expected_answer": "Answers should discuss joy as fruit of the Spirit, rooted in salvation not circumstances.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 23,
+    "question": "What is the peace of God?",
+    "expected_answer": "Answers should describe peace that surpasses understanding, from trusting in Christ.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 24,
+    "question": "What does patience look like in the Christian life?",
+    "expected_answer": "Answers should discuss patience as fruit of the Spirit, enduring trials and waiting on God.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 25,
+    "question": "What does the Bible say about kindness?",
+    "expected_answer": "Answers should discuss kindness as reflecting God's character, commanded toward all people.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 26,
+    "question": "What is biblical goodness?",
+    "expected_answer": "Answers should describe goodness as moral excellence produced by the Spirit in believers.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 27,
+    "question": "What does faithfulness mean in the Christian life?",
+    "expected_answer": "Answers should discuss faithfulness as steadfast trust in God and reliability in His service.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 28,
+    "question": "What is gentleness according to Scripture?",
+    "expected_answer": "Answers should describe gentleness as strength under control, modeled by Christ.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 29,
+    "question": "What is self-control in the Bible?",
+    "expected_answer": "Answers should discuss self-control as mastery over desires through the Spirit's power.",
+    "relevant_chunk_ids": []
+  },
+  {
+    "id": 30,
+    "question": "What does repentance mean?",
+    "expected_answer": "Answers should explain repentance as turning from sin and turning to God in faith.",
+    "relevant_chunk_ids": []
+  }
+]

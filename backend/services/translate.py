@@ -11,6 +11,9 @@ from pathlib import Path
 import httpx
 import yaml
 
+from services.glossary_applier import GlossaryApplier
+from services.translation_cache import TranslationCache
+
 logger = logging.getLogger(__name__)
 
 def _cfg() -> dict:
@@ -35,6 +38,19 @@ async def _sarvam(text: str, src: str, tgt: str, timeout: int) -> str:
         r.raise_for_status()
         return r.json()["translated_text"]
 
+async def _google(text: str, src: str, tgt: str, timeout: int) -> str:
+    key = os.environ.get("GOOGLE_API_KEY", "")
+    if not key:
+        raise EnvironmentError("GOOGLE_API_KEY not set. Add it in Settings.")
+    async with httpx.AsyncClient(timeout=timeout) as c:
+        r = await c.post(
+            "https://translation.googleapis.com/language/translate/v2",
+            params={"key": key},
+            json={"q": text, "source": src, "target": tgt, "format": "text"},
+        )
+        r.raise_for_status()
+        return r.json()["data"]["translations"][0]["translatedText"]
+
 async def _openrouter(text: str, src: str, tgt: str, model: str, timeout: int) -> str:
     key = os.environ.get("OPENROUTER_API_KEY", "")
     if not key:
@@ -55,12 +71,20 @@ async def _openrouter(text: str, src: str, tgt: str, model: str, timeout: int) -
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"].strip()
 
+async def _indictrans2(text: str, src: str, tgt: str) -> str | None:
+    from services.indictrans2 import translate as it2_translate
+    try:
+        return await it2_translate(text, src, tgt)
+    except Exception:
+        return None
+
 async def translate(
     text: str,
     src: str = "te",
     tgt: str = "en",
     provider: str | None = None,
     model: str | None = None,
+    cache: TranslationCache | None = None,
 ) -> str:
     if not text or not text.strip():
         return ""
@@ -70,9 +94,36 @@ async def translate(
     m = model or llm.get("model", "google/gemma-3-27b-it")
     t = llm.get("timeout_s", 30)
 
+    # Check cache
+    if cache and llm.get("cache", True):
+        cached = await cache.get(text, src, tgt, p)
+        if cached is not None:
+            return cached
+
     if p == "sarvam":
-        return await _sarvam(text, src, tgt, t)
+        result = await _sarvam(text, src, tgt, t)
     elif p == "openrouter":
-        return await _openrouter(text, src, tgt, m, t)
+        result = await _openrouter(text, src, tgt, m, t)
+    elif p == "indictrans2":
+        result = await _indictrans2(text, src, tgt)
+        if result is None:
+            fallback = cfg.get("indictrans2", {}).get("fallback_provider", "openrouter")
+            if fallback == "sarvam":
+                result = await _sarvam(text, src, tgt, t)
+            else:
+                result = await _openrouter(text, src, tgt, m, t)
+    elif p == "google":
+        result = await _google(text, src, tgt, t)
     else:
         raise ValueError(f"Unknown provider: {p!r}")
+
+    # Write to cache
+    if cache and llm.get("cache", True) and result:
+        await cache.set(text, src, tgt, p, result)
+
+    # Glossary post-processing
+    if result and cache:
+        applier = await GlossaryApplier.from_db(cache.session)
+        result = applier.apply(result)
+
+    return result
