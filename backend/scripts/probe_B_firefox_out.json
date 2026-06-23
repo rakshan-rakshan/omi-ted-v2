@@ -1,0 +1,68 @@
+﻿D:\Projects-D\omi-ted-v2\backend\venv\Scripts\python.exe : ERROR: could not find firefox cookies database in 
+'C:\\Users\\kawin\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles', 
+'C:\\Users\\kawin\\AppData\\Local\\Packages\\Mozilla.Firefox_n80bbvh6b1yt2\\LocalCache\\Roaming\\Mozilla\\Firefox\\Profiles'
+At line:1 char:33
++ ...  "firefox"; D:\Projects-D\omi-ted-v2\backend\venv\Scripts\python.exe  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR: could no...efox\\Profiles':String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ERROR: could not find firefox cookies database in 'C:\\Users\\kawin\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles', 
+'C:\\Users\\kawin\\AppData\\Local\\Packages\\Mozilla.Firefox_n80bbvh6b1yt2\\LocalCache\\Roaming\\Mozilla\\Firefox\\Profiles'
+ERROR: could not find firefox cookies database in 'C:\\Users\\kawin\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles', 
+'C:\\Users\\kawin\\AppData\\Local\\Packages\\Mozilla.Firefox_n80bbvh6b1yt2\\LocalCache\\Roaming\\Mozilla\\Firefox\\Profiles'
+ERROR: could not find firefox cookies database in 'C:\\Users\\kawin\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles', 
+'C:\\Users\\kawin\\AppData\\Local\\Packages\\Mozilla.Firefox_n80bbvh6b1yt2\\LocalCache\\Roaming\\Mozilla\\Firefox\\Profiles'
+ERROR: could not find firefox cookies database in 'C:\\Users\\kawin\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles', 
+'C:\\Users\\kawin\\AppData\\Local\\Packages\\Mozilla.Firefox_n80bbvh6b1yt2\\LocalCache\\Roaming\\Mozilla\\Firefox\\Profiles'
+{
+  "strategy": "B_cookies_firefox",
+  "total_ids": 5,
+  "successes": 0,
+  "status_counts": {
+    "other:DownloadError": 5
+  },
+  "total_elapsed_s": 9.9,
+  "per_video": [
+    {
+      "video_id": "FhU_C5HFjjc",
+      "phase": "extract",
+      "ok": false,
+      "status": "other:DownloadError",
+      "error": "ERROR: could not find firefox cookies database in 'C:\\\\Users\\\\kawin\\\\AppData\\\\Roaming\\\\Mozilla\\\\Firefox\\\\Profiles', 'C:\\\\Users\\\\kawin\\\\AppData\\\\Local\\\\Packages\\\\Mozilla.Firefox_n80bbvh6b1yt2\\\\LocalCac",
+      "elapsed_ms": 687
+    },
+    {
+      "video_id": "jn6eLn6ERYY",
+      "phase": "extract",
+      "ok": false,
+      "status": "other:DownloadError",
+      "error": "ERROR: could not find firefox cookies database in 'C:\\\\Users\\\\kawin\\\\AppData\\\\Roaming\\\\Mozilla\\\\Firefox\\\\Profiles', 'C:\\\\Users\\\\kawin\\\\AppData\\\\Local\\\\Packages\\\\Mozilla.Firefox_n80bbvh6b1yt2\\\\LocalCac",
+      "elapsed_ms": 233
+    },
+    {
+      "video_id": "srw9klHw3d0",
+      "phase": "extract",
+      "ok": false,
+      "status": "other:DownloadError",
+      "error": "ERROR: could not find firefox cookies database in 'C:\\\\Users\\\\kawin\\\\AppData\\\\Roaming\\\\Mozilla\\\\Firefox\\\\Profiles', 'C:\\\\Users\\\\kawin\\\\AppData\\\\Local\\\\Packages\\\\Mozilla.Firefox_n80bbvh6b1yt2\\\\LocalCac",
+      "elapsed_ms": 440
+    },
+    {
+      "video_id": "fSbkKpnXQBo",
+      "phase": "extract",
+      "ok": false,
+      "status": "other:DownloadError",
+      "error": "ERROR: could not find firefox cookies database in 'C:\\\\Users\\\\kawin\\\\AppData\\\\Roaming\\\\Mozilla\\\\Firefox\\\\Profiles', 'C:\\\\Users\\\\kawin\\\\AppData\\\\Local\\\\Packages\\\\Mozilla.Firefox_n80bbvh6b1yt2\\\\LocalCac",
+      "elapsed_ms": 256
+    },
+    {
+      "video_id": "N4AXUiFd0CI",
+      "phase": "extract",
+      "ok": false,
+      "status": "other:DownloadError",
+      "error": "ERROR: could not find firefox cookies database in 'C:\\\\Users\\\\kawin\\\\AppData\\\\Roaming\\\\Mozilla\\\\Firefox\\\\Profiles', 'C:\\\\Users\\\\kawin\\\\AppData\\\\Local\\\\Packages\\\\Mozilla.Firefox_n80bbvh6b1yt2\\\\LocalCac",
+      "elapsed_ms": 250
+    }
+  ]
+}

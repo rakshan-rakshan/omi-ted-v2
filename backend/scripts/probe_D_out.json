@@ -1,0 +1,71 @@
+﻿{
+  "strategy": "D_warp_socks5",
+  "total_ids": 5,
+  "successes": 0,
+  "status_counts": {
+    "other:ImportError": 5
+  },
+  "total_elapsed_s": 65.0,
+  "per_video": [
+    {
+      "video_id": "FhU_C5HFjjc",
+      "phase": "subtitle",
+      "ok": false,
+      "te_formats_found": 6,
+      "te_url_found": true,
+      "title": "\u0c2e\u0c3e\u0c30\u0c28\u0c3f \u0c15\u0c4d\u0c30\u0c48\u0c38\u0c4d\u0c24\u0c35 \u0c38\u0c02\u0c18\u0c02!",
+      "duration_s": 76,
+      "status": "other:ImportError",
+      "error": "Using SOCKS proxy, but the 'socksio' package is not installed. Make sure to install httpx using `pip install httpx[socks]`.",
+      "elapsed_ms": 15730
+    },
+    {
+      "video_id": "jn6eLn6ERYY",
+      "phase": "subtitle",
+      "ok": false,
+      "te_formats_found": 6,
+      "te_url_found": true,
+      "title": "\u0c15\u0c4d\u0c30\u0c48\u0c38\u0c4d\u0c24\u0c35 \u0c1c\u0c40\u0c35\u0c28 \u0c2a\u0c4d\u0c30\u0c3e\u0c30\u0c02\u0c2d \u0c05\u0c21\u0c41\u0c17\u0c41!",
+      "duration_s": 49,
+      "status": "other:ImportError",
+      "error": "Using SOCKS proxy, but the 'socksio' package is not installed. Make sure to install httpx using `pip install httpx[socks]`.",
+      "elapsed_ms": 9667
+    },
+    {
+      "video_id": "srw9klHw3d0",
+      "phase": "subtitle",
+      "ok": false,
+      "te_formats_found": 6,
+      "te_url_found": true,
+      "title": "\u0c2a\u0c48\u0c38\u0c3e! \u0c28\u0c40\u0c30\u0c41!! \u0c28\u0c40\u0c38\u0c41!!!",
+      "duration_s": 64,
+      "status": "other:ImportError",
+      "error": "Using SOCKS proxy, but the 'socksio' package is not installed. Make sure to install httpx using `pip install httpx[socks]`.",
+      "elapsed_ms": 9531
+    },
+    {
+      "video_id": "fSbkKpnXQBo",
+      "phase": "subtitle",
+      "ok": false,
+      "te_formats_found": 6,
+      "te_url_found": true,
+      "title": "\u0c0f \u0c2e\u0c41\u0c16\u0c02\u0c2c\u0c41 \u0c24\u0c4b\u0c21 \u0c35\u0c24\u0c4d\u0c24\u0c41\u0c2f\u0c47\u0c38\u0c41 \u0c28\u0c3e\u0c27 \u0c28\u0c40\u0c26\u0c41 \u0c2e\u0c4d\u0c30\u0c4b\u0c32 .Author:\u0c1c\u0c4a\u0c28\u0c4d\u0c28\u0c15\u0c42\u0c1f\u0c3f \u0c26\u0c47\u0c35\u0c26\u0c3e\u0c28\u0c02 ! | Ashrith & Anugna",
+      "duration_s": 350,
+      "status": "other:ImportError",
+      "error": "Using SOCKS proxy, but the 'socksio' package is not installed. Make sure to install httpx using `pip install httpx[socks]`.",
+      "elapsed_ms": 11570
+    },
+    {
+      "video_id": "N4AXUiFd0CI",
+      "phase": "subtitle",
+      "ok": false,
+      "te_formats_found": 6,
+      "te_url_found": true,
+      "title": "15-Mar-2026 | Sunday Service | First Message | Malkajgiri Church | Apostle Dr AS Ranjith Ophir",
+      "duration_s": 6100,
+      "status": "other:ImportError",
+      "error": "Using SOCKS proxy, but the 'socksio' package is not installed. Make sure to install httpx using `pip install httpx[socks]`.",
+      "elapsed_ms": 10491
+    }
+  ]
+}

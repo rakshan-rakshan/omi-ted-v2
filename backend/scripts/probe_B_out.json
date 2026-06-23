@@ -1,0 +1,68 @@
+﻿D:\Projects-D\omi-ted-v2\backend\venv\Scripts\python.exe : ERROR: Could not copy Chrome cookie database. See  
+https://github.com/yt-dlp/yt-dlp/issues/7271  for more info
+At line:1 char:1
++ D:\Projects-D\omi-ted-v2\backend\venv\Scripts\python.exe D:\Projects- ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR: Could no...  for more info:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ERROR: ERROR: Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info
+ERROR: Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info
+ERROR: ERROR: Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info
+ERROR: Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info
+ERROR: ERROR: Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info
+ERROR: Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info
+ERROR: ERROR: Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info
+ERROR: Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info
+ERROR: ERROR: Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info
+{
+  "strategy": "B_cookies_chrome",
+  "total_ids": 5,
+  "successes": 0,
+  "status_counts": {
+    "other:DownloadError": 5
+  },
+  "total_elapsed_s": 37.1,
+  "per_video": [
+    {
+      "video_id": "FhU_C5HFjjc",
+      "phase": "extract",
+      "ok": false,
+      "status": "other:DownloadError",
+      "error": "ERROR: ERROR: Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info",
+      "elapsed_ms": 13266
+    },
+    {
+      "video_id": "jn6eLn6ERYY",
+      "phase": "extract",
+      "ok": false,
+      "status": "other:DownloadError",
+      "error": "ERROR: ERROR: Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info",
+      "elapsed_ms": 4271
+    },
+    {
+      "video_id": "srw9klHw3d0",
+      "phase": "extract",
+      "ok": false,
+      "status": "other:DownloadError",
+      "error": "ERROR: ERROR: Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info",
+      "elapsed_ms": 3896
+    },
+    {
+      "video_id": "fSbkKpnXQBo",
+      "phase": "extract",
+      "ok": false,
+      "status": "other:DownloadError",
+      "error": "ERROR: ERROR: Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info",
+      "elapsed_ms": 4248
+    },
+    {
+      "video_id": "N4AXUiFd0CI",
+      "phase": "extract",
+      "ok": false,
+      "status": "other:DownloadError",
+      "error": "ERROR: ERROR: Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info",
+      "elapsed_ms": 3420
+    }
+  ]
+}
