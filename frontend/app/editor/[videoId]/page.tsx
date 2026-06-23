@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
 import useSWR from "swr";
 import Link from "next/link";
@@ -7,6 +7,13 @@ import axios from "axios";
 import { motion, AnimatePresence } from "motion/react";
 import YouTubePlayer, { YouTubePlayerHandle } from "@/components/YouTubePlayer";
 import SegmentMicInput from "@/components/SegmentMicInput";
+import {
+  EditorBulkToolbar,
+  EditorHelpOverlay,
+  useEditorShortcuts,
+  CONTENT_TYPE_DEFAULT,
+  CONTENT_TYPE_SONG,
+} from "@/components/EditorShortcuts";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -99,10 +106,12 @@ function FullTextMode({ videoId, seekTo }: { videoId: string; seekTo: (seconds: 
 
 // ── Mode B: Sentence-parallel table ──────────────────────────────────────
 
-function SentenceRow({ seg, youtubeId, onUpdate, seekTo, translatingSegId, onTranslate }: {
+function SentenceRow({ seg, youtubeId, onUpdate, seekTo, translatingSegId, onTranslate, isChecked, isFocused, onToggleCheck, onFocus }: {
   seg: Segment; youtubeId: string; onUpdate: (id: number, u: Partial<Segment>) => void;
   seekTo: (seconds: number) => void; translatingSegId: number | null;
   onTranslate: (segId: number) => void;
+  isChecked: boolean; isFocused: boolean;
+  onToggleCheck: (id: number) => void; onFocus: (id: number) => void;
 }) {
   const [val, setVal] = useState(seg.en_human ?? "");
   const [saving, setSaving] = useState(false);
@@ -124,9 +133,28 @@ function SentenceRow({ seg, youtubeId, onUpdate, seekTo, translatingSegId, onTra
   }
 
   const isDone = !!seg.en_human;
+  const isSong = seg.content_type === CONTENT_TYPE_SONG;
+  const baseBg = isDone ? "rgba(16,185,129,0.02)" : "var(--white)";
+  const focusBg = isFocused ? "rgba(244,63,94,0.05)" : baseBg;
 
   return (
-    <tr style={{ borderBottom: "1px solid var(--gray-100)", background: isDone ? "rgba(16,185,129,0.02)" : "var(--white)" }}>
+    <tr
+      onClick={() => onFocus(seg.id)}
+      style={{
+        borderBottom: "1px solid var(--gray-100)",
+        background: focusBg,
+        boxShadow: isFocused ? "inset 3px 0 0 var(--rose)" : undefined,
+        cursor: "pointer",
+      }}
+    >
+      {/* Checkbox */}
+      <td style={{ padding: "12px 8px 12px 14px", verticalAlign: "top", width: 32 }}>
+        <input type="checkbox" checked={isChecked}
+          onChange={() => onToggleCheck(seg.id)}
+          onClick={e => e.stopPropagation()}
+          aria-label={`Select segment ${seg.segment_index}`}
+          style={{ cursor: "pointer", margin: 0 }} />
+      </td>
       {/* Timestamp */}
       <td style={{ padding: "12px 14px", verticalAlign: "top", whiteSpace: "nowrap", width: 70 }}>
         <button onClick={() => seekTo(seg.start_time)}
@@ -159,6 +187,11 @@ function SentenceRow({ seg, youtubeId, onUpdate, seekTo, translatingSegId, onTra
       {/* Telugu */}
       <td style={{ padding: "12px 14px", verticalAlign: "top", width: "40%" }}>
         <p style={{ fontFamily: "'Noto Sans Telugu', sans-serif", fontSize: 14, lineHeight: 1.8, color: "var(--gray-900)", margin: 0 }}>
+          {isSong && (
+            <span title="Flagged as song" style={{ fontSize: 11, marginRight: 6, color: "var(--rose)", verticalAlign: "middle" }}>
+              🎵
+            </span>
+          )}
           {seg.te_original}
         </p>
       </td>
@@ -197,21 +230,33 @@ function SentenceRow({ seg, youtubeId, onUpdate, seekTo, translatingSegId, onTra
   );
 }
 
-function SentencesMode({ videoId, page, setPage, data, isLoading, error, handleUpdate, seekTo, translatingSegId, onTranslate }: {
+function SentencesMode({ videoId, page, setPage, data, isLoading, error, handleUpdate, seekTo, translatingSegId, onTranslate, checkedIds, focusedId, onToggleCheck, onToggleAll, onFocus }: {
   videoId: string; page: number; setPage: (fn: (p: number) => number) => void;
   data: SegmentsPage | undefined; isLoading: boolean; error: unknown;
   handleUpdate: (id: number, u: Partial<Segment>) => void;
   seekTo: (seconds: number) => void; translatingSegId: number | null;
   onTranslate: (segId: number) => void;
+  checkedIds: Set<number>; focusedId: number | null;
+  onToggleCheck: (id: number) => void; onToggleAll: (checked: boolean) => void;
+  onFocus: (id: number) => void;
 }) {
   if (isLoading) return <div style={{ padding: "60px 0", textAlign: "center", color: "var(--gray-400)", fontSize: 13 }}>Loading segments…</div>;
   if (error) return <div style={{ padding: "40px 0", textAlign: "center", color: "var(--red)", fontSize: 13 }}>Failed to load — is the backend running?</div>;
+
+  const items = data?.items ?? [];
+  const allChecked = items.length > 0 && items.every(s => checkedIds.has(s.id));
+  const someChecked = items.some(s => checkedIds.has(s.id));
 
   return (
     <div style={{ background: "var(--white)", border: "1px solid var(--gray-200)", borderRadius: 12, overflow: "hidden" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ background: "var(--gray-50)", borderBottom: "1px solid var(--gray-200)" }}>
+            <th style={{ padding: "10px 8px 10px 14px", width: 32 }}>
+              <input type="checkbox" checked={allChecked} ref={el => { if (el) el.indeterminate = !allChecked && someChecked; }}
+                onChange={e => onToggleAll(e.target.checked)} aria-label="Select all visible segments"
+                style={{ cursor: "pointer", margin: 0 }} />
+            </th>
             <th style={{ padding: "10px 14px", fontSize: 11, fontWeight: 600, color: "var(--gray-400)", textAlign: "left", textTransform: "uppercase", letterSpacing: "0.06em", width: 70 }}>Time</th>
             <th style={{ padding: "10px 14px", fontSize: 11, fontWeight: 600, color: "var(--gray-400)", textAlign: "left", textTransform: "uppercase", letterSpacing: "0.06em", width: 60 }}>Actions</th>
             <th style={{ padding: "10px 14px", fontSize: 11, fontWeight: 600, color: "var(--gray-400)", textAlign: "left", textTransform: "uppercase", letterSpacing: "0.06em", width: "40%" }}>తెలుగు</th>
@@ -219,10 +264,12 @@ function SentencesMode({ videoId, page, setPage, data, isLoading, error, handleU
           </tr>
         </thead>
         <tbody>
-          {data?.items.map(seg => (
+          {items.map(seg => (
             <SentenceRow key={seg.id} seg={seg} youtubeId={videoId} onUpdate={handleUpdate}
               seekTo={seekTo} translatingSegId={translatingSegId}
-              onTranslate={onTranslate} />
+              onTranslate={onTranslate}
+              isChecked={checkedIds.has(seg.id)} isFocused={focusedId === seg.id}
+              onToggleCheck={onToggleCheck} onFocus={onFocus} />
           ))}
         </tbody>
       </table>
@@ -245,10 +292,12 @@ function SentencesMode({ videoId, page, setPage, data, isLoading, error, handleU
 
 // ── Mode C: Fine-tune cards ──────────────────────────────────────────────
 
-function FineTuneCard({ seg, youtubeId, onUpdate, seekTo, translatingSegId, onTranslate }: {
+function FineTuneCard({ seg, youtubeId, onUpdate, seekTo, translatingSegId, onTranslate, isChecked, isFocused, onToggleCheck, onFocus }: {
   seg: Segment; youtubeId: string; onUpdate: (id: number, u: Partial<Segment>) => void;
   seekTo: (seconds: number) => void; translatingSegId: number | null;
   onTranslate: (segId: number) => void;
+  isChecked: boolean; isFocused: boolean;
+  onToggleCheck: (id: number) => void; onFocus: (id: number) => void;
 }) {
   const [val, setVal] = useState(seg.en_human ?? seg.en_auto ?? "");
   const [saving, setSaving] = useState(false);
@@ -269,16 +318,27 @@ function FineTuneCard({ seg, youtubeId, onUpdate, seekTo, translatingSegId, onTr
     finally { setSaving(false); }
   }
 
+  const isSong = seg.content_type === CONTENT_TYPE_SONG;
+  const borderColor = isFocused ? "var(--rose)" : seg.is_reviewed ? "var(--green-border)" : "var(--gray-200)";
+  const bg = isFocused ? "rgba(244,63,94,0.04)" : seg.is_reviewed ? "rgba(16,185,129,0.03)" : "var(--white)";
+
   return (
     <motion.div layout
+      onClick={() => onFocus(seg.id)}
       style={{
-        background: seg.is_reviewed ? "rgba(16,185,129,0.03)" : "var(--white)",
-        border: `1px solid ${seg.is_reviewed ? "var(--green-border)" : "var(--gray-200)"}`,
+        background: bg,
+        border: `1px solid ${borderColor}`,
         borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10,
+        boxShadow: isFocused ? "0 0 0 3px rgba(244,63,94,0.08)" : undefined,
       }}
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 380, damping: 28 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <input type="checkbox" checked={isChecked}
+          onChange={() => onToggleCheck(seg.id)}
+          onClick={e => e.stopPropagation()}
+          aria-label={`Select segment ${seg.segment_index}`}
+          style={{ cursor: "pointer", margin: 0 }} />
         <button onClick={() => seekTo(seg.start_time)}
           style={{ fontSize: 12, fontFamily: "JetBrains Mono", fontWeight: 600, color: "var(--rose)", textDecoration: "none", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
           {fmtTime(seg.start_time)}
@@ -302,8 +362,13 @@ function FineTuneCard({ seg, youtubeId, onUpdate, seekTo, translatingSegId, onTr
         >
           {translatingSegId === seg.id ? "…" : "⚡"}
         </button>
+        {isSong && (
+          <span title="Flagged as song" style={{ fontSize: 10, fontWeight: 600, color: "var(--rose)", background: "rgba(244,63,94,0.08)", border: "1px solid var(--rose-border, #fecdd3)", padding: "1px 6px", borderRadius: 10, marginLeft: "auto" }}>
+            🎵 song
+          </span>
+        )}
         {seg.is_reviewed && (
-          <span style={{ fontSize: 10, fontWeight: 600, color: "var(--green)", background: "var(--green-light)", border: "1px solid var(--green-border)", padding: "1px 6px", borderRadius: 10, marginLeft: "auto" }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: "var(--green)", background: "var(--green-light)", border: "1px solid var(--green-border)", padding: "1px 6px", borderRadius: 10, marginLeft: isSong ? 0 : "auto" }}>
             ✓ done
           </span>
         )}
@@ -342,12 +407,14 @@ function FineTuneCard({ seg, youtubeId, onUpdate, seekTo, translatingSegId, onTr
   );
 }
 
-function FineTuneMode({ videoId, page, setPage, data, isLoading, error, handleUpdate, seekTo, translatingSegId, onTranslate }: {
+function FineTuneMode({ videoId, page, setPage, data, isLoading, error, handleUpdate, seekTo, translatingSegId, onTranslate, checkedIds, focusedId, onToggleCheck, onFocus }: {
   videoId: string; page: number; setPage: (fn: (p: number) => number) => void;
   data: SegmentsPage | undefined; isLoading: boolean; error: unknown;
   handleUpdate: (id: number, u: Partial<Segment>) => void;
   seekTo: (seconds: number) => void; translatingSegId: number | null;
   onTranslate: (segId: number) => void;
+  checkedIds: Set<number>; focusedId: number | null;
+  onToggleCheck: (id: number) => void; onFocus: (id: number) => void;
 }) {
   if (isLoading) return <div style={{ padding: "60px 0", textAlign: "center", color: "var(--gray-400)", fontSize: 13 }}>Loading…</div>;
   if (error) return <div style={{ padding: "40px 0", textAlign: "center", color: "var(--red)", fontSize: 13 }}>Failed to load — is the backend running?</div>;
@@ -356,7 +423,9 @@ function FineTuneMode({ videoId, page, setPage, data, isLoading, error, handleUp
       {data?.items.map(seg => (
         <FineTuneCard key={seg.id} seg={seg} youtubeId={videoId} onUpdate={handleUpdate}
           seekTo={seekTo} translatingSegId={translatingSegId}
-          onTranslate={onTranslate} />
+          onTranslate={onTranslate}
+          isChecked={checkedIds.has(seg.id)} isFocused={focusedId === seg.id}
+          onToggleCheck={onToggleCheck} onFocus={onFocus} />
       ))}
       {data && data.total_pages > 1 && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, paddingTop: 8 }}>
@@ -398,6 +467,10 @@ export default function EditorPage() {
   const [showAutoPanel, setShowAutoPanel] = useState(false);
   const playerRef = useRef<YouTubePlayerHandle>(null);
   const [translatingSegId, setTranslatingSegId] = useState<number | null>(null);
+  const [focusedSegmentId, setFocusedSegmentId] = useState<number | null>(null);
+  const [checkedIds, setCheckedIds] = useState<Set<number>>(() => new Set());
+  const [showHelp, setShowHelp] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   useEffect(() => {
     const p = localStorage.getItem("omi_provider") as Provider | null;
@@ -419,6 +492,86 @@ export default function EditorPage() {
   const handleUpdate = useCallback((id: number, updated: Partial<Segment>) => {
     mutate(prev => prev ? { ...prev, items: prev.items.map(s => s.id === id ? { ...s, ...updated } : s) } : prev, false);
   }, [mutate]);
+
+  const patchSegment = useCallback(async (id: number, patch: Partial<Segment>) => {
+    try {
+      const { data: updated } = await axios.patch<Segment>(`/api/v1/segments/${id}`, patch);
+      handleUpdate(id, updated);
+    } catch (e) {
+      console.error("patchSegment failed", id, e);
+    }
+  }, [handleUpdate]);
+
+  const items = useMemo<Segment[]>(() => data?.items ?? [], [data]);
+  const itemIds = useMemo(() => items.map(s => s.id), [items]);
+
+  const toggleCheck = useCallback((id: number) => {
+    setCheckedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback((checked: boolean) => {
+    setCheckedIds(prev => {
+      if (!checked) {
+        const next = new Set(prev);
+        for (const id of itemIds) next.delete(id);
+        return next;
+      }
+      const next = new Set(prev);
+      for (const id of itemIds) next.add(id);
+      return next;
+    });
+  }, [itemIds]);
+
+  const clearChecks = useCallback(() => setCheckedIds(new Set()), []);
+
+  useEffect(() => { setCheckedIds(new Set()); setFocusedSegmentId(null); }, [page, videoId]);
+
+  const shortcutHandlers = useMemo(() => ({
+    patchSegment: (id: number, patch: Partial<Segment>) => { void patchSegment(id, patch); },
+    setFocusedId: (id: number | null) => setFocusedSegmentId(id),
+    setShowHelp: (open: boolean) => setShowHelp(open),
+  }), [patchSegment]);
+
+  useEditorShortcuts(mode !== "fulltext", items, focusedSegmentId, shortcutHandlers);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      const t = e.target as HTMLElement | null;
+      if (t) {
+        const tag = t.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable) return;
+      }
+      if (showHelp) return;
+      setFocusedSegmentId(null);
+      setCheckedIds(new Set());
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showHelp]);
+
+  async function applyBulk(patch: Partial<Segment>) {
+    if (!checkedIds.size) return;
+    setBulkBusy(true);
+    try {
+      const ids = Array.from(checkedIds);
+      for (const id of ids) {
+        try {
+          const { data: updated } = await axios.patch<Segment>(`/api/v1/segments/${id}`, patch);
+          handleUpdate(id, updated);
+        } catch (e) {
+          console.error("bulk patch failed for", id, e);
+        }
+      }
+    } finally {
+      setBulkBusy(false);
+    }
+  }
 
   const done      = data?.items.filter(s => s.en_human && s.en_human.trim()).length ?? 0;
   const remaining = (data?.items.length ?? 0) - done;
@@ -571,20 +724,41 @@ export default function EditorPage() {
       {/* ── Embedded YouTube Player ── */}
       <YouTubePlayer ref={playerRef} videoId={videoId} />
 
+      {/* ── Bulk toolbar (appears when 2+ rows checked) ── */}
+      {mode !== "fulltext" && (
+        <EditorBulkToolbar
+          count={checkedIds.size}
+          busy={bulkBusy}
+          onMarkReviewed={() => applyBulk({ is_reviewed: true })}
+          onSetQuality={q => applyBulk({ quality_score: q })}
+          onFlagSong={() => applyBulk({ content_type: CONTENT_TYPE_SONG })}
+          onClearSong={() => applyBulk({ content_type: CONTENT_TYPE_DEFAULT })}
+          onShowHelp={() => setShowHelp(true)}
+          onClear={clearChecks}
+        />
+      )}
+
       {/* ── Mode content ── */}
       {mode === "fulltext" && <FullTextMode videoId={videoId} seekTo={handleSeekTo} />}
       {mode === "sentences" && (
         <SentencesMode videoId={videoId} page={page} setPage={setPage}
           data={data} isLoading={isLoading} error={error} handleUpdate={handleUpdate}
           seekTo={handleSeekTo} translatingSegId={translatingSegId}
-          onTranslate={translateSegment} />
+          onTranslate={translateSegment}
+          checkedIds={checkedIds} focusedId={focusedSegmentId}
+          onToggleCheck={toggleCheck} onToggleAll={toggleAll}
+          onFocus={setFocusedSegmentId} />
       )}
       {mode === "finetune" && (
         <FineTuneMode videoId={videoId} page={page} setPage={setPage}
           data={data} isLoading={isLoading} error={error} handleUpdate={handleUpdate}
           seekTo={handleSeekTo} translatingSegId={translatingSegId}
-          onTranslate={translateSegment} />
+          onTranslate={translateSegment}
+          checkedIds={checkedIds} focusedId={focusedSegmentId}
+          onToggleCheck={toggleCheck} onFocus={setFocusedSegmentId} />
       )}
+
+      <EditorHelpOverlay open={showHelp} onClose={() => setShowHelp(false)} />
 
       {/* ── Bottom bar: export + mark reviewed (sentence + finetune only) ── */}
       {mode !== "fulltext" && (
@@ -592,8 +766,13 @@ export default function EditorPage() {
           display: "flex", alignItems: "center", gap: 12, marginTop: 20,
           paddingTop: 16, borderTop: "1px solid var(--gray-100)", flexWrap: "wrap",
         }}>
-          <span style={{ fontSize: 12, color: "var(--gray-400)", flex: 1 }}>
+          <span style={{ fontSize: 12, color: "var(--gray-400)", flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
             Ctrl+Enter or click away to save each edit.
+            <button onClick={() => setShowHelp(true)}
+              title="Keyboard shortcuts"
+              style={{ background: "none", border: "1px solid var(--gray-200)", borderRadius: 6, padding: "2px 8px", fontSize: 10, color: "var(--gray-500)", cursor: "pointer" }}>
+              ? shortcuts
+            </button>
           </span>
           {data && !allDone && (
             <motion.button onClick={markPageReviewed} disabled={markingAll}
