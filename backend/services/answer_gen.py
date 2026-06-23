@@ -12,6 +12,23 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 
+def _detect_language(text: str) -> str:
+    te_chars = sum(1 for c in text if '\u0C00' <= c <= '\u0C7F')
+    return "te" if te_chars > len(text) * 0.3 else "en"
+
+
+TE_SYSTEM_PROMPT = """మీరు క్రైస్తవ బోధనలు మరియు తెలుగు మంత్రిత్వ శాఖ కంటెంట్ గురించి ప్రశ్నలకు సమాధానం ఇచ్చే సహాయక సహాయకుడు.
+
+సందర్భాన్ని ఉపయోగించి ప్రశ్నకు సమాధానం ఇవ్వండి. [1], [2] మొదలైన వాటిని ఉపయోగించి మూలాలను ఉదహరించండి.
+
+సందర్భం:
+{context}
+
+ప్రశ్న: {query}
+
+సంక్షిప్తంగా మరియు ఖచ్చితంగా సమాధానం ఇవ్వండి. సందర్భంలో తగినంత సమాచారం లేకపోతే, చెప్పండి."""
+
+
 async def generate_answer(
     query: str,
     chunks: list[dict],
@@ -34,7 +51,11 @@ async def generate_answer(
         })
 
     context = "\n\n".join(context_parts)
-    prompt = f"""You are a helpful assistant answering questions about Christian sermons and Telugu ministry content.
+    lang = _detect_language(query)
+    if lang == "te":
+        prompt = TE_SYSTEM_PROMPT.format(context=context, query=query)
+    else:
+        prompt = f"""You are a helpful assistant answering questions about Christian sermons and Telugu ministry content.
 
 Use the following context to answer the question. Cite sources using [1], [2] etc.
 

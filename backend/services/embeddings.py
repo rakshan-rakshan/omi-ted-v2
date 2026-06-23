@@ -14,8 +14,8 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 _EMBEDDER = None
-_EMBED_DIM = 384
-_MODEL_NAME = os.getenv("EMBEDDER_MODEL", "all-MiniLM-L6-v2")
+_EMBED_DIM = 768
+_MODEL_NAME = os.getenv("EMBEDDER_MODEL", "intfloat/multilingual-e5-base")
 _AVAILABLE = True
 
 

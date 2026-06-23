@@ -37,3 +37,16 @@ cookies.txt
 # Logs
 *.log
 logs/
+*.out
+*.err
+
+# Runtime artifacts
+backend/server.pid
+backend/scripts/videos_dump.json
+
+# Claude Code local state
+.claude/settings.local.json
+.claude/worktrees/
+
+# Project uses npm, not pnpm (per global CLAUDE.md). Avoid dual lockfiles.
+frontend/pnpm-lock.yaml

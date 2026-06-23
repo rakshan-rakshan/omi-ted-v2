@@ -115,6 +115,9 @@ class Message(Base):
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     message_type: Mapped[str] = mapped_column(String(20), default="sermon", nullable=False, index=True)
+    source_type: Mapped[str] = mapped_column(String(20), default="youtube", nullable=False, index=True)
+    source_url: Mapped[str | None] = mapped_column(Text)
+    author: Mapped[str | None] = mapped_column(String(200))
     series: Mapped[str | None] = mapped_column(String(200))
     language: Mapped[str] = mapped_column(String(5), default="te", nullable=False)
     scripture_refs: Mapped[str | None] = mapped_column(Text)  # JSON array for SQLite compat

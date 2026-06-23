@@ -5,6 +5,8 @@ import useSWR from "swr";
 import Link from "next/link";
 import axios from "axios";
 import { motion, AnimatePresence } from "motion/react";
+import YouTubePlayer, { YouTubePlayerHandle } from "@/components/YouTubePlayer";
+import SegmentMicInput from "@/components/SegmentMicInput";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -40,7 +42,7 @@ function fmtTime(s: number) {
 
 // ── Mode A: Full Text split-screen ────────────────────────────────────────
 
-function FullTextMode({ videoId }: { videoId: string }) {
+function FullTextMode({ videoId, seekTo }: { videoId: string; seekTo: (seconds: number) => void }) {
   const { data, isLoading } = useSWR<SegmentsPage>(
     `/api/v1/videos/${videoId}/segments?page=1&page_size=9999`, fetcher
   );
@@ -62,11 +64,10 @@ function FullTextMode({ videoId }: { videoId: string }) {
         <div style={{ fontFamily: "'Noto Sans Telugu', sans-serif", fontSize: 15, lineHeight: 2, color: "var(--gray-900)" }}>
           {items.map((seg, i) => (
             <span key={seg.id}>
-              <a href={`https://www.youtube.com/watch?v=${videoId}&t=${Math.floor(seg.start_time)}s`}
-                target="_blank" rel="noreferrer"
-                style={{ fontSize: 10, color: "var(--gray-300)", fontFamily: "JetBrains Mono", textDecoration: "none", marginRight: 4, verticalAlign: "middle" }}>
+              <button onClick={() => seekTo(seg.start_time)}
+                style={{ fontSize: 10, color: "var(--gray-300)", fontFamily: "JetBrains Mono", textDecoration: "none", marginRight: 4, verticalAlign: "middle", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                 {fmtTime(seg.start_time)}
-              </a>
+              </button>
               {seg.te_original}
               {i < items.length - 1 ? " " : ""}
             </span>
@@ -98,11 +99,17 @@ function FullTextMode({ videoId }: { videoId: string }) {
 
 // ── Mode B: Sentence-parallel table ──────────────────────────────────────
 
-function SentenceRow({ seg, youtubeId, onUpdate }: { seg: Segment; youtubeId: string; onUpdate: (id: number, u: Partial<Segment>) => void }) {
+function SentenceRow({ seg, youtubeId, onUpdate, seekTo, translatingSegId, onTranslate }: {
+  seg: Segment; youtubeId: string; onUpdate: (id: number, u: Partial<Segment>) => void;
+  seekTo: (seconds: number) => void; translatingSegId: number | null;
+  onTranslate: (segId: number) => void;
+}) {
   const [val, setVal] = useState(seg.en_human ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => { setVal(seg.en_human ?? ""); }, [seg.en_human]);
 
   async function save() {
     const trimmed = val.trim();
@@ -122,11 +129,32 @@ function SentenceRow({ seg, youtubeId, onUpdate }: { seg: Segment; youtubeId: st
     <tr style={{ borderBottom: "1px solid var(--gray-100)", background: isDone ? "rgba(16,185,129,0.02)" : "var(--white)" }}>
       {/* Timestamp */}
       <td style={{ padding: "12px 14px", verticalAlign: "top", whiteSpace: "nowrap", width: 70 }}>
-        <a href={`https://www.youtube.com/watch?v=${youtubeId}&t=${Math.floor(seg.start_time)}s`}
-          target="_blank" rel="noreferrer"
-          style={{ fontSize: 11, fontFamily: "JetBrains Mono", color: "var(--rose)", textDecoration: "none", fontWeight: 600 }}>
+        <button onClick={() => seekTo(seg.start_time)}
+          style={{ fontSize: 11, fontFamily: "JetBrains Mono", color: "var(--rose)", background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: 0, textDecoration: "none" }}>
           {fmtTime(seg.start_time)}
-        </a>
+        </button>
+      </td>
+      {/* Actions */}
+      <td style={{ padding: "12px 6px", verticalAlign: "top", whiteSpace: "nowrap", width: 60 }}>
+        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          <SegmentMicInput onResult={text => {
+            axios.patch(`/api/v1/segments/${seg.id}`, { en_human: text.trim(), is_reviewed: true })
+              .then(({ data: updated }) => onUpdate(seg.id, updated));
+          }} language="te-IN" />
+          <button
+            onClick={() => onTranslate(seg.id)}
+            title="Translate this segment"
+            disabled={translatingSegId === seg.id}
+            style={{
+              width: 28, height: 28, borderRadius: 6, border: "1px solid var(--gray-200)",
+              background: "var(--white)", color: "var(--gray-500)",
+              cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center",
+              opacity: translatingSegId === seg.id ? 0.5 : 1,
+            }}
+          >
+            {translatingSegId === seg.id ? "…" : "⚡"}
+          </button>
+        </div>
       </td>
       {/* Telugu */}
       <td style={{ padding: "12px 14px", verticalAlign: "top", width: "40%" }}>
@@ -169,10 +197,12 @@ function SentenceRow({ seg, youtubeId, onUpdate }: { seg: Segment; youtubeId: st
   );
 }
 
-function SentencesMode({ videoId, page, setPage, data, isLoading, error, handleUpdate }: {
+function SentencesMode({ videoId, page, setPage, data, isLoading, error, handleUpdate, seekTo, translatingSegId, onTranslate }: {
   videoId: string; page: number; setPage: (fn: (p: number) => number) => void;
   data: SegmentsPage | undefined; isLoading: boolean; error: unknown;
   handleUpdate: (id: number, u: Partial<Segment>) => void;
+  seekTo: (seconds: number) => void; translatingSegId: number | null;
+  onTranslate: (segId: number) => void;
 }) {
   if (isLoading) return <div style={{ padding: "60px 0", textAlign: "center", color: "var(--gray-400)", fontSize: 13 }}>Loading segments…</div>;
   if (error) return <div style={{ padding: "40px 0", textAlign: "center", color: "var(--red)", fontSize: 13 }}>Failed to load — is the backend running?</div>;
@@ -183,13 +213,16 @@ function SentencesMode({ videoId, page, setPage, data, isLoading, error, handleU
         <thead>
           <tr style={{ background: "var(--gray-50)", borderBottom: "1px solid var(--gray-200)" }}>
             <th style={{ padding: "10px 14px", fontSize: 11, fontWeight: 600, color: "var(--gray-400)", textAlign: "left", textTransform: "uppercase", letterSpacing: "0.06em", width: 70 }}>Time</th>
+            <th style={{ padding: "10px 14px", fontSize: 11, fontWeight: 600, color: "var(--gray-400)", textAlign: "left", textTransform: "uppercase", letterSpacing: "0.06em", width: 60 }}>Actions</th>
             <th style={{ padding: "10px 14px", fontSize: 11, fontWeight: 600, color: "var(--gray-400)", textAlign: "left", textTransform: "uppercase", letterSpacing: "0.06em", width: "40%" }}>తెలుగు</th>
             <th style={{ padding: "10px 14px", fontSize: 11, fontWeight: 600, color: "var(--gray-400)", textAlign: "left", textTransform: "uppercase", letterSpacing: "0.06em" }}>English (your translation)</th>
           </tr>
         </thead>
         <tbody>
           {data?.items.map(seg => (
-            <SentenceRow key={seg.id} seg={seg} youtubeId={videoId} onUpdate={handleUpdate} />
+            <SentenceRow key={seg.id} seg={seg} youtubeId={videoId} onUpdate={handleUpdate}
+              seekTo={seekTo} translatingSegId={translatingSegId}
+              onTranslate={onTranslate} />
           ))}
         </tbody>
       </table>
@@ -212,11 +245,17 @@ function SentencesMode({ videoId, page, setPage, data, isLoading, error, handleU
 
 // ── Mode C: Fine-tune cards ──────────────────────────────────────────────
 
-function FineTuneCard({ seg, youtubeId, onUpdate }: { seg: Segment; youtubeId: string; onUpdate: (id: number, u: Partial<Segment>) => void }) {
+function FineTuneCard({ seg, youtubeId, onUpdate, seekTo, translatingSegId, onTranslate }: {
+  seg: Segment; youtubeId: string; onUpdate: (id: number, u: Partial<Segment>) => void;
+  seekTo: (seconds: number) => void; translatingSegId: number | null;
+  onTranslate: (segId: number) => void;
+}) {
   const [val, setVal] = useState(seg.en_human ?? seg.en_auto ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => { setVal(seg.en_human ?? seg.en_auto ?? ""); }, [seg.en_human, seg.en_auto]);
 
   async function save() {
     const trimmed = val.trim();
@@ -240,13 +279,29 @@ function FineTuneCard({ seg, youtubeId, onUpdate }: { seg: Segment; youtubeId: s
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 380, damping: 28 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <a href={`https://www.youtube.com/watch?v=${youtubeId}&t=${Math.floor(seg.start_time)}s`}
-          target="_blank" rel="noreferrer"
-          style={{ fontSize: 12, fontFamily: "JetBrains Mono", fontWeight: 600, color: "var(--rose)", textDecoration: "none" }}>
+        <button onClick={() => seekTo(seg.start_time)}
+          style={{ fontSize: 12, fontFamily: "JetBrains Mono", fontWeight: 600, color: "var(--rose)", textDecoration: "none", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
           {fmtTime(seg.start_time)}
-        </a>
+        </button>
         <span style={{ fontSize: 10, color: "var(--gray-400)" }}>·</span>
         <span style={{ fontSize: 10, color: "var(--gray-400)" }}>{seg.duration.toFixed(1)}s</span>
+        <SegmentMicInput onResult={text => {
+          axios.patch(`/api/v1/segments/${seg.id}`, { en_human: text.trim(), is_reviewed: true })
+            .then(({ data: updated }) => onUpdate(seg.id, updated));
+        }} language="te-IN" />
+        <button
+          onClick={() => onTranslate(seg.id)}
+          title="Translate this segment"
+          disabled={translatingSegId === seg.id}
+          style={{
+            width: 28, height: 28, borderRadius: 6, border: "1px solid var(--gray-200)",
+            background: "var(--white)", color: "var(--gray-500)",
+            cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center",
+            opacity: translatingSegId === seg.id ? 0.5 : 1,
+          }}
+        >
+          {translatingSegId === seg.id ? "…" : "⚡"}
+        </button>
         {seg.is_reviewed && (
           <span style={{ fontSize: 10, fontWeight: 600, color: "var(--green)", background: "var(--green-light)", border: "1px solid var(--green-border)", padding: "1px 6px", borderRadius: 10, marginLeft: "auto" }}>
             ✓ done
@@ -263,7 +318,7 @@ function FineTuneCard({ seg, youtubeId, onUpdate }: { seg: Segment; youtubeId: s
           onBlur={save}
           onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ref.current?.blur(); } }}
           rows={3}
-          placeholder="Edit the English translation…"
+          placeholder={seg.en_auto ? seg.en_auto : "Edit the English translation…"}
           style={{
             width: "100%", padding: "10px 12px", borderRadius: 8, resize: "vertical",
             fontSize: 13, lineHeight: 1.6, fontFamily: "DM Sans, sans-serif",
@@ -273,9 +328,9 @@ function FineTuneCard({ seg, youtubeId, onUpdate }: { seg: Segment; youtubeId: s
           onFocus={e => { e.target.style.borderColor = "var(--rose)"; e.target.style.boxShadow = "0 0 0 3px rgba(244,63,94,0.08)"; e.target.style.background = "var(--white)"; }}
           onBlurCapture={e => { e.target.style.borderColor = "var(--gray-200)"; e.target.style.boxShadow = "none"; e.target.style.background = "var(--gray-50)"; }}
         />
-        {seg.en_human && seg.en_auto && seg.en_human !== seg.en_auto && (
+        {seg.en_auto && (!seg.en_human || seg.en_human !== seg.en_auto) && (
           <p style={{ fontSize: 10, color: "var(--gray-400)", margin: "4px 2px 0", fontStyle: "italic" }}>
-            Original auto: {seg.en_auto}
+            {seg.en_human ? "Original auto: " : "Auto: "}{seg.en_auto}
           </p>
         )}
         <div style={{ position: "absolute", top: 8, right: 10, fontSize: 11, pointerEvents: "none" }}>
@@ -287,17 +342,21 @@ function FineTuneCard({ seg, youtubeId, onUpdate }: { seg: Segment; youtubeId: s
   );
 }
 
-function FineTuneMode({ videoId, page, setPage, data, isLoading, error, handleUpdate }: {
+function FineTuneMode({ videoId, page, setPage, data, isLoading, error, handleUpdate, seekTo, translatingSegId, onTranslate }: {
   videoId: string; page: number; setPage: (fn: (p: number) => number) => void;
   data: SegmentsPage | undefined; isLoading: boolean; error: unknown;
   handleUpdate: (id: number, u: Partial<Segment>) => void;
+  seekTo: (seconds: number) => void; translatingSegId: number | null;
+  onTranslate: (segId: number) => void;
 }) {
   if (isLoading) return <div style={{ padding: "60px 0", textAlign: "center", color: "var(--gray-400)", fontSize: 13 }}>Loading…</div>;
   if (error) return <div style={{ padding: "40px 0", textAlign: "center", color: "var(--red)", fontSize: 13 }}>Failed to load — is the backend running?</div>;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {data?.items.map(seg => (
-        <FineTuneCard key={seg.id} seg={seg} youtubeId={videoId} onUpdate={handleUpdate} />
+        <FineTuneCard key={seg.id} seg={seg} youtubeId={videoId} onUpdate={handleUpdate}
+          seekTo={seekTo} translatingSegId={translatingSegId}
+          onTranslate={onTranslate} />
       ))}
       {data && data.total_pages > 1 && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, paddingTop: 8 }}>
@@ -328,7 +387,7 @@ export default function EditorPage() {
   const { videoId } = useParams() as { videoId: string };
   const [mode, setMode] = useState<EditorMode>("sentences");
   const [page, setPage] = useState(1);
-  const [provider, setProvider] = useState<Provider>("openrouter");
+  const [provider, setProvider] = useState<Provider>("sarvam");
   const [modelPreset, setModelPreset] = useState(PRESETS[0].id);
   const [customModel, setCustomModel] = useState("");
   const [translating, setTranslating] = useState(false);
@@ -337,6 +396,8 @@ export default function EditorPage() {
   const [exportFormat, setExportFormat] = useState<"raw" | "alpaca" | "openai">("raw");
   const [markingAll, setMarkingAll] = useState(false);
   const [showAutoPanel, setShowAutoPanel] = useState(false);
+  const playerRef = useRef<YouTubePlayerHandle>(null);
+  const [translatingSegId, setTranslatingSegId] = useState<number | null>(null);
 
   useEffect(() => {
     const p = localStorage.getItem("omi_provider") as Provider | null;
@@ -386,7 +447,32 @@ export default function EditorPage() {
       await Promise.all(un.map(s =>
         axios.patch(`/api/v1/segments/${s.id}`, { is_reviewed: true }).then(({ data: u }) => handleUpdate(s.id, u))
       ));
-    } finally { setMarkingAll(false); }
+    }     finally { setMarkingAll(false); }
+  }
+
+  const handleSeekTo = useCallback((seconds: number) => {
+    playerRef.current?.seekTo(seconds);
+  }, []);
+
+  async function translateSegment(segId: number) {
+    setTranslatingSegId(segId);
+    setTxResult(null); setTxError(null);
+    try {
+      const { data: r } = await axios.post("/api/v1/batch/translate", {
+        youtube_id: videoId,
+        provider,
+        model: activeModel,
+        segment_ids: [segId],
+        force: true,
+        concurrency: 1,
+      });
+      setTxResult(r); mutate();
+    } catch (err) {
+      const m = axios.isAxiosError(err) ? err.response?.data?.detail ?? err.message : String(err);
+      setTxError(typeof m === "string" ? m : JSON.stringify(m));
+    } finally {
+      setTranslatingSegId(null);
+    }
   }
 
   return (
@@ -482,15 +568,22 @@ export default function EditorPage() {
         )}
       </AnimatePresence>
 
+      {/* ── Embedded YouTube Player ── */}
+      <YouTubePlayer ref={playerRef} videoId={videoId} />
+
       {/* ── Mode content ── */}
-      {mode === "fulltext" && <FullTextMode videoId={videoId} />}
+      {mode === "fulltext" && <FullTextMode videoId={videoId} seekTo={handleSeekTo} />}
       {mode === "sentences" && (
         <SentencesMode videoId={videoId} page={page} setPage={setPage}
-          data={data} isLoading={isLoading} error={error} handleUpdate={handleUpdate} />
+          data={data} isLoading={isLoading} error={error} handleUpdate={handleUpdate}
+          seekTo={handleSeekTo} translatingSegId={translatingSegId}
+          onTranslate={translateSegment} />
       )}
       {mode === "finetune" && (
         <FineTuneMode videoId={videoId} page={page} setPage={setPage}
-          data={data} isLoading={isLoading} error={error} handleUpdate={handleUpdate} />
+          data={data} isLoading={isLoading} error={error} handleUpdate={handleUpdate}
+          seekTo={handleSeekTo} translatingSegId={translatingSegId}
+          onTranslate={translateSegment} />
       )}
 
       {/* ── Bottom bar: export + mark reviewed (sentence + finetune only) ── */}

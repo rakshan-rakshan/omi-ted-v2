@@ -14,6 +14,11 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 
+def _detect_language(text: str) -> str:
+    te_chars = sum(1 for c in text if '\u0C00' <= c <= '\u0C7F')
+    return "te" if te_chars > len(text) * 0.3 else "en"
+
+
 @dataclass
 class SearchResult:
     chunk_id: int
@@ -35,12 +40,13 @@ async def hybrid_search(
 ) -> list[SearchResult]:
     rrf_k = settings.rag.rrf_k
     dialect = session.bind.dialect.name if session.bind else "sqlite"
+    lang = _detect_language(query_text)
 
     if query_embedding is None:
-        return await _keyword_only(session, query_text, filters, top_k)
+        return await _keyword_only(session, query_text, filters, top_k, lang)
     if dialect == "postgresql":
-        return await _pg_hybrid(session, query_text, query_embedding, filters, top_k, rrf_k)
-    return await _sqlite_hybrid(session, query_text, query_embedding, filters, top_k, rrf_k)
+        return await _pg_hybrid(session, query_text, query_embedding, filters, top_k, rrf_k, lang)
+    return await _sqlite_hybrid(session, query_text, query_embedding, filters, top_k, rrf_k, lang)
 
 
 async def _keyword_only(
@@ -48,12 +54,13 @@ async def _keyword_only(
     query_text: str,
     filters: dict | None,
     top_k: int,
+    lang: str = "en",
 ) -> list[SearchResult]:
     """Fallback: keyword-only search when embeddings unavailable."""
     import sqlalchemy as sa
 
-    conditions = ["c.chunk_text LIKE :q"]
-    params = {"q": f"%{query_text}%", "top_k": top_k}
+    conditions = ["c.chunk_text LIKE :q", "c.language_code = :lang"]
+    params = {"q": f"%{query_text}%", "top_k": top_k, "lang": lang}
     if filters:
         if filters.get("speaker"):
             conditions.append("v.channel LIKE :speaker")
@@ -87,12 +94,13 @@ async def _pg_hybrid(
     filters: dict | None,
     top_k: int,
     rrf_k: int,
+    lang: str = "en",
 ) -> list[SearchResult]:
     from sqlalchemy import text
 
     emb_str = ",".join(str(v) for v in query_embedding)
 
-    conditions = ["1=1"]
+    conditions = ["c.language_code = :lang"]
     if filters:
         if filters.get("speaker"):
             conditions.append("m.title ILIKE :speaker_pattern")
@@ -113,12 +121,12 @@ async def _pg_hybrid(
     ),
     keyword AS (
         SELECT c.id, c.chunk_text, c.message_id,
-               ts_rank(to_tsvector('english', c.chunk_text), plainto_tsquery('english', :query)) AS score,
+               ts_rank(to_tsvector('simple', c.chunk_text), plainto_tsquery('simple', :query)) AS score,
                m.title, m.description, v.youtube_id, v.channel
         FROM chunks c
         JOIN messages m ON m.id = c.message_id
         JOIN videos v ON v.id = m.video_id
-        WHERE to_tsvector('english', c.chunk_text) @@ plainto_tsquery('english', :query)
+        WHERE to_tsvector('simple', c.chunk_text) @@ plainto_tsquery('simple', :query)
           AND {' AND '.join(conditions)}
         ORDER BY score DESC
         LIMIT :top_k
@@ -145,6 +153,7 @@ async def _pg_hybrid(
         "top_k": top_k,
         "rrf_k": rrf_k,
         "rrf_k2": rrf_k,
+        "lang": lang,
     }
     if filters:
         if filters.get("speaker"):
@@ -175,6 +184,7 @@ async def _sqlite_hybrid(
     filters: dict | None,
     top_k: int,
     rrf_k: int,
+    lang: str = "en",
 ) -> list[SearchResult]:
     import json
     import math
@@ -182,8 +192,8 @@ async def _sqlite_hybrid(
 
     emb_arr = np.array(query_embedding)
 
-    conditions = ["1=1"]
-    params: dict = {}
+    conditions = ["c.language_code = :lang"]
+    params: dict = {"lang": lang}
     if filters:
         if filters.get("speaker"):
             conditions.append("v.channel LIKE :speaker")

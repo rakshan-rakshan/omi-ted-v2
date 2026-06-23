@@ -9,6 +9,7 @@ Flow:
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -21,6 +22,9 @@ from models import Job, Segment, Video
 from services.transcript import fetch_video
 
 router = APIRouter(tags=["ingest"])
+
+# Limit concurrent YouTube fetches to avoid 429 rate limits
+_YT_SEMAPHORE = asyncio.Semaphore(3)
 
 
 # ---------------------------------------------------------------------------
@@ -67,78 +71,79 @@ async def _run_ingest(video_id: int, job_id: int) -> None:
     Run the full ingest pipeline in a background task.
     Opens its own DB session — FastAPI's request session is closed by the time this runs.
     """
-    async with AsyncSessionLocal() as session:
-        # Mark job as running
-        job_result = await session.execute(select(Job).where(Job.id == job_id))
-        job = job_result.scalar_one_or_none()
-        video_result = await session.execute(select(Video).where(Video.id == video_id))
-        video = video_result.scalar_one_or_none()
+    async with _YT_SEMAPHORE:
+        async with AsyncSessionLocal() as session:
+            # Mark job as running
+            job_result = await session.execute(select(Job).where(Job.id == job_id))
+            job = job_result.scalar_one_or_none()
+            video_result = await session.execute(select(Video).where(Video.id == video_id))
+            video = video_result.scalar_one_or_none()
 
-        if not job or not video:
-            return  # safety guard — should never happen
+            if not job or not video:
+                return  # safety guard — should never happen
 
-        job.status = "running"
-        job.started_at = datetime.now(timezone.utc)
-        video.status = "fetching"
-        await session.commit()
+            job.status = "running"
+            job.started_at = datetime.now(timezone.utc)
+            video.status = "fetching"
+            await session.commit()
 
-        try:
-            data = await fetch_video(video.youtube_id)
+            try:
+                data = await fetch_video(video.youtube_id)
 
-            # Update video metadata
-            video.title      = data.title
-            video.channel    = data.channel
-            video.duration_s = data.duration_s
+                # Update video metadata
+                video.title      = data.title
+                video.channel    = data.channel
+                video.duration_s = data.duration_s
 
-            if not data.has_te:
-                video.status  = "no_transcript"
-                job.status    = "done"
-                job.error_msg = "No Telugu captions found on this video."
+                if not data.has_te:
+                    video.status  = "no_transcript"
+                    job.status    = "done"
+                    job.error_msg = "No Telugu captions found on this video."
+                    job.finished_at = datetime.now(timezone.utc)
+                    await session.commit()
+                    return
+
+                # Delete any segments from a previous ingest attempt
+                from sqlalchemy import delete as sa_delete
+                await session.execute(sa_delete(Segment).where(Segment.video_id == video_id))
+
+                # Write segments
+                seg_objects = []
+                for idx, seg in enumerate(data.segments):
+                    obj = Segment(
+                        video_id=video_id,
+                        segment_index=idx,
+                        start_time=seg.start_time,
+                        duration=seg.duration,
+                        te_original=seg.te_original,
+                        en_auto=seg.en_auto,
+                        en_human=None,
+                        en_final=seg.en_auto,   # en_final = en_human if set, else en_auto
+                        content_type="unknown",
+                        is_reviewed=False,
+                    )
+                    session.add(obj)
+                    seg_objects.append(obj)
+
+                # Classify content types (song/prayer/sermon)
+                from services.song_detector import classify_segments
+                seg_data = [{"index": s.segment_index, "text": s.te_original} for s in seg_objects]
+                content_types = classify_segments(seg_data)
+                for s, ct in zip(seg_objects, content_types):
+                    s.content_type = ct
+
+                video.status    = "fetched"
+                video.fetched_at = datetime.now(timezone.utc)
+                job.status      = "done"
                 job.finished_at = datetime.now(timezone.utc)
                 await session.commit()
-                return
 
-            # Delete any segments from a previous ingest attempt
-            from sqlalchemy import delete as sa_delete
-            await session.execute(sa_delete(Segment).where(Segment.video_id == video_id))
-
-            # Write segments
-            seg_objects = []
-            for idx, seg in enumerate(data.segments):
-                obj = Segment(
-                    video_id=video_id,
-                    segment_index=idx,
-                    start_time=seg.start_time,
-                    duration=seg.duration,
-                    te_original=seg.te_original,
-                    en_auto=seg.en_auto,
-                    en_human=None,
-                    en_final=seg.en_auto,   # en_final = en_human if set, else en_auto
-                    content_type="unknown",
-                    is_reviewed=False,
-                )
-                session.add(obj)
-                seg_objects.append(obj)
-
-            # Classify content types (song/prayer/sermon)
-            from services.song_detector import classify_segments
-            seg_data = [{"index": s.segment_index, "text": s.te_original} for s in seg_objects]
-            content_types = classify_segments(seg_data)
-            for s, ct in zip(seg_objects, content_types):
-                s.content_type = ct
-
-            video.status    = "fetched"
-            video.fetched_at = datetime.now(timezone.utc)
-            job.status      = "done"
-            job.finished_at = datetime.now(timezone.utc)
-            await session.commit()
-
-        except Exception as exc:
-            video.status    = "error"
-            job.status      = "failed"
-            job.error_msg   = str(exc)[:1000]
-            job.finished_at = datetime.now(timezone.utc)
-            await session.commit()
+            except Exception as exc:
+                video.status    = "error"
+                job.status      = "failed"
+                job.error_msg   = str(exc)[:1000]
+                job.finished_at = datetime.now(timezone.utc)
+                await session.commit()
 
 
 # ---------------------------------------------------------------------------

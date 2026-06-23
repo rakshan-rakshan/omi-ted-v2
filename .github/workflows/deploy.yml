@@ -1,0 +1,41 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements.txt
+        working-directory: ./backend
+      - run: python -c "import sys; sys.path.insert(0,'.'); from database import Base; print('OK')"
+        working-directory: ./backend
+
+  deploy:
+    needs: test-backend
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Hetzner
+        env:
+          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+        run: |
+          echo "$HETZNER_SSH_KEY" > /tmp/ssh_key
+          chmod 600 /tmp/ssh_key
+          ssh -o StrictHostKeyChecking=no -i /tmp/ssh_key root@$HETZNER_HOST "
+            cd /opt/omitred
+            git pull origin main
+            docker compose up -d --build
+            docker system prune -f
+            echo 'Deploy complete — health check in 15s...'
+            sleep 15
+            curl -f http://localhost:8000/health && echo 'Backend OK' || echo 'Backend FAIL'
+          "

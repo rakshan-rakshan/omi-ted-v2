@@ -1,7 +1,10 @@
 """
 Search and Answer endpoints.
-POST /api/v1/search — hybrid search returning ranked chunks
-POST /api/v1/ask — search + answer generation with citations
+POST /api/v1/search       — hybrid search returning ranked chunks
+POST /api/v1/ask          — search + answer generation with citations
+POST /api/v1/ask/advanced — multi-step RAG with query rewriting + reranking
+GET  /api/v1/models/health  — model provider health check (admin)
+GET  /api/v1/models/reranker — reranker availability check
 """
 from __future__ import annotations
 
@@ -9,7 +12,7 @@ import json
 import logging
 import time
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +21,8 @@ from models import QueryLog
 from services.embeddings import embed_query
 from services.hybrid_search import hybrid_search, SearchResult
 from services.answer_gen import generate_answer
+from services.rag_pipeline import multi_step_rag
+from services.model_router import model_router
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["search"])
@@ -159,3 +164,70 @@ async def ask_endpoint(
         search_latency_ms=search_latency,
         generation_latency_ms=gen_latency,
     )
+
+
+# ── Advanced RAG ──────────────────────────────────────────────────────────────
+
+
+class AdvancedAskResponse(BaseModel):
+    answer: str
+    context: str
+    sources: list[CitationSource]
+    rewritten_query: dict | None = None
+
+
+@router.post("/ask/advanced", response_model=AdvancedAskResponse)
+async def advanced_ask_endpoint(
+    body: AskRequest,
+    session: AsyncSession = Depends(get_session),
+) -> AdvancedAskResponse:
+    result = await multi_step_rag(
+        query=body.query,
+        session=session,
+        filters=body.filters.model_dump() if body.filters else None,
+    )
+
+    source_lookup = {s.get("chunk_id", 0): s for s in result.get("sources", [])}
+    sources = [
+        CitationSource(
+            index=i + 1,
+            chunk_id=s.get("chunk_id", 0),
+            chunk_text=s.get("chunk_text", "")[:500],
+            video=ChunkVideoInfo(
+                youtube_id=s.get("youtube_id", ""),
+                title=s.get("title", ""),
+                channel=s.get("channel", ""),
+            ),
+        )
+        for i, s in enumerate(result.get("sources", []))
+    ]
+
+    return AdvancedAskResponse(
+        answer=result["answer"],
+        context=result.get("context", ""),
+        sources=sources,
+        rewritten_query=result.get("rewritten_query"),
+    )
+
+
+# ── Model health endpoints ────────────────────────────────────────────────────
+
+
+@router.get("/models/health")
+async def models_health(
+    x_admin_key: str = Header(..., alias="X-Admin-Key"),
+) -> dict:
+    from config import settings
+
+    if x_admin_key != getattr(settings, "admin_key", ""):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    return await model_router.health_check()
+
+
+@router.get("/models/reranker")
+async def models_reranker() -> dict:
+    return {
+        "available": model_router._reranker is not None,
+        "model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+        "loaded": model_router._reranker_checked,
+    }

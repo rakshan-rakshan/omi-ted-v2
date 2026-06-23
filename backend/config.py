@@ -28,12 +28,35 @@ class _RagSettings:
         self.hnsw_ef_search: int = data.get("hnsw_ef_search", 40)
 
 
+class _ModelSettings:
+    def __init__(self, data: dict[str, Any]) -> None:
+        self.primary_provider: str = data.get("primary_provider", "ollama")
+        self.ollama_base_url: str = data.get("ollama_base_url", "http://localhost:11434")
+        self.embedding_model: str = data.get("embedding_model", "bge-m3")
+        self.embedding_dim: int = data.get("embedding_dim", 768)
+        self.query_rewrite_model: str = data.get("query_rewrite_model", "qwen2.5:3b")
+        self.synthesis_model: str = data.get("synthesis_model", "qwen2.5:7b-instruct")
+        self.reranker_model: str = data.get("reranker_model", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+        self.reranker_max_length: int = data.get("reranker_max_length", 512)
+
+
+class _RAGPipelineSettings:
+    def __init__(self, data: dict[str, Any]) -> None:
+        self.enable_query_rewrite: bool = data.get("enable_query_rewrite", True)
+        self.enable_reranking: bool = data.get("enable_reranking", True)
+        self.enable_context_budget: bool = data.get("enable_context_budget", True)
+        self.max_context_tokens: int = data.get("max_context_tokens", 3000)
+        self.max_rewritten_terms: int = data.get("max_rewritten_terms", 5)
+
+
 class _Settings:
     def __init__(self) -> None:
         p = Path(__file__).parent / "config.yaml"
         with open(p) as f:
             raw: dict = yaml.safe_load(f) or {}
         self.rag = _RagSettings(raw.get("rag", {}))
+        self.models = _ModelSettings(raw.get("models", {}))
+        self.rag_pipeline = _RAGPipelineSettings(raw.get("rag_pipeline", {}))
         self._raw = raw
 
 

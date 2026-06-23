@@ -47,8 +47,6 @@ _YDL_OPTS: dict = {
     "extractor_retries": _MAX_RETRIES,
     "socket_timeout": 30,
 }
-if _PROXY:
-    _YDL_OPTS["proxy"] = _PROXY
 
 
 def _retryable(exc: Exception) -> bool:
@@ -339,13 +337,14 @@ async def _ytdlp_fetch(youtube_id: str) -> tuple[str | None, str | None, dict]:
 # Public API
 # ---------------------------------------------------------------------------
 
-async def fetch_video(youtube_id: str) -> VideoData:
+async def fetch_video(youtube_id: str, skip_songs: bool = False, skip_en: bool = False) -> VideoData:
     """
     Fetch metadata + Telugu (+ English if available) auto-captions.
 
     Raises ValueError with a clear message if:
       - Video has no Telugu captions
       - Both fetch strategies fail
+      - skip_songs is True and video has 3 or fewer segments (likely a song)
     """
     # ── Strategy 1: youtube-transcript-api ───────────────────────────────
     loop = asyncio.get_running_loop()
@@ -371,7 +370,7 @@ async def fetch_video(youtube_id: str) -> VideoData:
             cookies_file = os.environ.get("YTDLP_COOKIES_FILE", "").strip() or None
             if not te_raw and te_url:
                 te_raw = await _download_subtitle(te_url, cookies_file, required=True)
-            if not en_raw and en_url:
+            if not en_raw and en_url and not skip_en:
                 en_raw = await _download_subtitle(en_url, cookies_file, required=False)
         except Exception as exc:
             if not te_raw:
@@ -412,6 +411,11 @@ async def fetch_video(youtube_id: str) -> VideoData:
         )
         for idx, chunk in enumerate(te_chunks)
     ]
+
+    if skip_songs and len(segments) <= 3:
+        raise ValueError(
+            f"Video '{youtube_id}' appears to be a song ({len(segments)} segments). Skipped."
+        )
 
     return VideoData(
         title=title,

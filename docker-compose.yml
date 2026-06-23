@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: omitred
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-omitred_dev}
+      POSTGRES_DB: omitred
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U omitred"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://omitred:${PG_PASSWORD:-omitred_dev}@postgres:5432/omitred
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      SARVAM_API_KEY: ${SARVAM_API_KEY:-}
+      EMBEDDER_MODEL: intfloat/multilingual-e5-base
+      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:8000
+      PYTHONPATH: /app
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE: /api/v1
+    environment:
+      BACKEND_URL: http://backend:8000
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata:

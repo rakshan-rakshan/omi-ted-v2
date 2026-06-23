@@ -8,6 +8,8 @@ import "./globals.css";
 
 const NAV = [
   { href: "/",        icon: "▤",  label: "Videos",   desc: "Video library" },
+  { href: "/upload",  icon: "↑",  label: "Upload",   desc: "Import documents" },
+  { href: "/search",  icon: "⌕",  label: "Search",   desc: "Find & ask" },
   { href: "/queue",   icon: "✎",  label: "Work Queue", desc: "Needs your edit" },
   { href: "/stats",   icon: "◈",  label: "Progress", desc: "Dataset quality" },
   { href: "/glossary",icon: "⬡",  label: "Glossary", desc: "Theological terms" },
