@@ -291,6 +291,13 @@ def _ydl_extract(youtube_id: str, cookies_file: str | None) -> dict:
     opts = {**_YDL_OPTS}
     if cookies_file and os.path.exists(cookies_file):
         opts["cookiefile"] = cookies_file
+    # Route caption-detection through the same proxy as the json3 download so the
+    # whole fetch shares one exit IP. Without this, extract uses the home IP (which
+    # YouTube 429s at volume) while only the subtitle download used WARP — the
+    # mismatch is why bulk ingest failed. Verified: WARP+socksio detects captions
+    # fine (157 langs), so the Session-17 "proxy breaks yt-dlp" issue no longer holds.
+    if _PROXY:
+        opts["proxy"] = _PROXY
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False) or {}
 
@@ -347,8 +354,15 @@ async def fetch_video(youtube_id: str, skip_songs: bool = False, skip_en: bool =
       - skip_songs is True and video has 3 or fewer segments (likely a song)
     """
     # ── Strategy 1: youtube-transcript-api ───────────────────────────────
+    # Skipped when a proxy (WARP) is configured: this path is requests-based and
+    # uses the home IP (no SOCKS without PySocks), which YouTube 429s at volume and
+    # is slow to fail. yt-dlp (strategy 2) carries the full fetch through the proxy.
+    # Its only unique benefit was YouTube's free te->en machine translation, which
+    # we replace with the OpenRouter translation step anyway.
     loop = asyncio.get_running_loop()
-    ytapi_result = await loop.run_in_executor(None, _ytapi_fetch, youtube_id)
+    ytapi_result = None
+    if not _PROXY:
+        ytapi_result = await loop.run_in_executor(None, _ytapi_fetch, youtube_id)
 
     title: str | None = None
     channel: str | None = None

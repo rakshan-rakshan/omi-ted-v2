@@ -10,6 +10,7 @@ Flow:
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -23,8 +24,9 @@ from services.transcript import fetch_video
 
 router = APIRouter(tags=["ingest"])
 
-# Limit concurrent YouTube fetches to avoid 429 rate limits
-_YT_SEMAPHORE = asyncio.Semaphore(3)
+# Limit concurrent YouTube fetches. Default 3 for direct; set YT_CONCURRENCY=1 when
+# routing through the WARP SOCKS proxy, which serializes poorly under parallel fetches.
+_YT_SEMAPHORE = asyncio.Semaphore(int(os.environ.get("YT_CONCURRENCY", "3")))
 
 
 # ---------------------------------------------------------------------------
