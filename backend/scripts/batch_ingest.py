@@ -110,12 +110,15 @@ async def main() -> None:
                     flush=True,
                 )
 
-                # Pacing + 429-aware backoff. A batch with failures/timeouts is treated
-                # as a possible rate-limit signal: cool off, escalating if it persists.
-                if counts["failed"] or counts["timeout"]:
+                # Pacing + throttle backoff. Per-video 429s are already retried inside
+                # transcript.py, so a plain "failed" here is an unfetchable video
+                # (no captions / private / deleted) — NOT a rate-limit signal, so it must
+                # not trigger a long sleep. Only job *timeouts* (a batch not finishing
+                # within JOB_POLL_TIMEOUT) indicate real throttling and escalate backoff.
+                if counts["timeout"]:
                     trouble_streak += 1
                     delay = BACKOFF_1 if trouble_streak == 1 else BACKOFF_2
-                    print(f"  ⚠ trouble streak {trouble_streak} → backing off {delay:.0f}s", flush=True)
+                    print(f"  ⚠ {counts['timeout']} job(s) timed out → backing off {delay:.0f}s (streak {trouble_streak})", flush=True)
                     await asyncio.sleep(delay)
                 else:
                     trouble_streak = 0
