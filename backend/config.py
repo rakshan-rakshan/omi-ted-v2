@@ -38,6 +38,12 @@ class _ModelSettings:
         self.synthesis_model: str = data.get("synthesis_model", "qwen2.5:7b-instruct")
         self.reranker_model: str = data.get("reranker_model", "cross-encoder/ms-marco-MiniLM-L-6-v2")
         self.reranker_max_length: int = data.get("reranker_max_length", 512)
+        # LLM-agnostic routing for RAG generation. provider: ollama (local/free/slow)
+        # | openrouter (paid/fast). openrouter_model is the slug used when a step
+        # routes to OpenRouter (synthesis or query rewrite).
+        self.synthesis_provider: str = data.get("synthesis_provider", "ollama")
+        self.rewrite_provider: str = data.get("rewrite_provider", "ollama")
+        self.openrouter_model: str = data.get("openrouter_model", "anthropic/claude-haiku-4.5")
 
 
 class _RAGPipelineSettings:

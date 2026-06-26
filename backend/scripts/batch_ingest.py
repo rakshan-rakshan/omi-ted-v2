@@ -4,6 +4,7 @@ Never overloads the backend or YouTube rate limits.
 """
 from __future__ import annotations
 
+import argparse
 import asyncio
 import csv
 import os
@@ -14,6 +15,11 @@ CSV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "urls_to_ing
 BATCH_SIZE = 3  # match backend semaphore
 JOB_POLL_INTERVAL = 5
 JOB_POLL_TIMEOUT = 120  # max wait per batch
+
+# Pacing / 429 backoff (Lane D: YouTube forgives a paused burst — don't burst).
+BASE_PACE = float(os.environ.get("INGEST_PACE", "2.5"))  # seconds between clean batches
+BACKOFF_1 = 60.0   # first batch with failures (likely 429): cool off
+BACKOFF_2 = 300.0  # consecutive trouble: back off hard
 
 
 def read_csv() -> list[str]:
@@ -53,8 +59,15 @@ async def wait_jobs(client: httpx.AsyncClient, job_ids: list[int]) -> dict[str, 
 
 
 async def main() -> None:
+    ap = argparse.ArgumentParser(description="Paced YouTube transcript ingest with 429 backoff.")
+    ap.add_argument("--limit", type=int, default=None, help="max videos to ingest (test runs)")
+    ap.add_argument("--pace", type=float, default=BASE_PACE, help="seconds between clean batches")
+    args = ap.parse_args()
+
     all_ids = read_csv()
-    print(f"CSV: {len(all_ids)} IDs", flush=True)
+    if args.limit:
+        all_ids = all_ids[: args.limit]
+    print(f"CSV: {len(all_ids)} IDs (pace={args.pace}s)", flush=True)
 
     batches = [all_ids[i : i + BATCH_SIZE] for i in range(0, len(all_ids), BATCH_SIZE)]
     print(f"{len(batches)} batches of {BATCH_SIZE}\n", flush=True)
@@ -63,6 +76,7 @@ async def main() -> None:
     total_failed = 0
     total_timeout = 0
     total_skipped = 0
+    trouble_streak = 0  # consecutive batches with failures/timeouts (likely 429)
 
     async with httpx.AsyncClient(timeout=60) as client:
         for idx, batch in enumerate(batches, 1):
@@ -96,10 +110,23 @@ async def main() -> None:
                     flush=True,
                 )
 
+                # Pacing + 429-aware backoff. A batch with failures/timeouts is treated
+                # as a possible rate-limit signal: cool off, escalating if it persists.
+                if counts["failed"] or counts["timeout"]:
+                    trouble_streak += 1
+                    delay = BACKOFF_1 if trouble_streak == 1 else BACKOFF_2
+                    print(f"  ⚠ trouble streak {trouble_streak} → backing off {delay:.0f}s", flush=True)
+                    await asyncio.sleep(delay)
+                else:
+                    trouble_streak = 0
+                    await asyncio.sleep(args.pace)
+
             except Exception as exc:
                 total_failed += len(batch)
-                print(f"Batch {idx}/{len(batches)}: ERROR {exc}", flush=True)
-                await asyncio.sleep(10)
+                trouble_streak += 1
+                delay = BACKOFF_1 if trouble_streak == 1 else BACKOFF_2
+                print(f"Batch {idx}/{len(batches)}: ERROR {exc} → backing off {delay:.0f}s", flush=True)
+                await asyncio.sleep(delay)
 
     print(f"\n=== DONE ===", flush=True)
     print(f"Done: {total_done} | Failed: {total_failed} | Timeout: {total_timeout} | Skipped: {total_skipped}", flush=True)

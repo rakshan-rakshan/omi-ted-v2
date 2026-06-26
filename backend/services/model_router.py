@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 
 import httpx
 
+from config import settings
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -303,19 +305,29 @@ class ModelRouter:
             {"role": "user", "content": query},
         ]
 
-        # 1. Try Ollama
-        result = await self._chat_ollama(messages, QUERY_REWRITE_MODEL, max_tokens=512)
-        parsed = self._parse_search_strategy(result)
-        if parsed:
-            return parsed
+        # Provider order is config-driven (models.rewrite_provider), same as synthesis.
+        or_model = settings.models.openrouter_model
+        if settings.models.rewrite_provider == "openrouter":
+            attempts = [("openrouter", or_model), ("ollama", QUERY_REWRITE_MODEL)]
+        else:
+            attempts = [("ollama", QUERY_REWRITE_MODEL), ("openrouter", or_model)]
 
-        # 2. Try HF
+        for prov, mdl in attempts:
+            if prov == "openrouter":
+                result = await self._chat_openrouter(messages, mdl, max_tokens=512)
+            else:
+                result = await self._chat_ollama(messages, mdl, max_tokens=512)
+            parsed = self._parse_search_strategy(result)
+            if parsed:
+                return parsed
+
+        # HF fallback
         result = await self._chat_hf(messages, "Qwen/Qwen2.5-1.5B-Instruct", max_tokens=512)
         parsed = self._parse_search_strategy(result)
         if parsed:
             return parsed
 
-        # 3. Skip rewriting — return original query as single term
+        # Skip rewriting — return original query as single term
         return {
             "terms": [
                 {"term": query, "language": lang, "boost": 2.0, "instructions": "original query"}
@@ -365,24 +377,28 @@ class ModelRouter:
             {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"},
         ]
 
-        # 1. Try Ollama (qwen2.5:7b-instruct)
-        result = await self._chat_ollama(messages, SYNTHESIS_MODEL, max_tokens=1024)
-        if result:
-            return result
+        # Provider order is config-driven (models.synthesis_provider). OpenRouter-first
+        # is the fast path; Ollama-first keeps the original local-only behavior. The
+        # other provider is always tried as a fallback.
+        or_model = settings.models.openrouter_model
+        if settings.models.synthesis_provider == "openrouter":
+            attempts = [("openrouter", or_model), ("ollama", SYNTHESIS_MODEL)]
+        else:
+            attempts = [("ollama", SYNTHESIS_MODEL), ("openrouter", or_model)]
 
-        # 2. Try HF Inference (Qwen2.5-7B-Instruct)
+        for prov, mdl in attempts:
+            if prov == "openrouter":
+                result = await self._chat_openrouter(messages, mdl, max_tokens=1024)
+            else:
+                result = await self._chat_ollama(messages, mdl, max_tokens=1024)
+            if result:
+                return result
+
+        # HF Inference fallback (Qwen2.5-7B-Instruct)
         result = await self._chat_hf(messages, "Qwen/Qwen2.5-7B-Instruct", max_tokens=1024)
         if result:
             return result
 
-        # 3. Try OpenRouter (claude-3-haiku)
-        result = await self._chat_openrouter(
-            messages, "anthropic/claude-3-haiku", max_tokens=1024
-        )
-        if result:
-            return result
-
-        # 4. Dummy fallback
         return f"I don't have enough information to answer: {query}"
 
     # ------------------------------------------------------------------

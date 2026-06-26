@@ -8,6 +8,7 @@ import hashlib
 import logging
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import TranslationCacheEntry
@@ -56,5 +57,10 @@ class TranslationCache:
             provider=provider,
         )
         self.session.add(entry)
-        await self.session.commit()
-        logger.debug("Cache set for key=%s", key[:12])
+        try:
+            await self.session.commit()
+            logger.debug("Cache set for key=%s", key[:12])
+        except IntegrityError:
+            # Another concurrent task cached the same text first — harmless.
+            await self.session.rollback()
+            logger.debug("Cache key already present (race), skipped: %s", key[:12])

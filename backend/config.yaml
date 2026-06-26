@@ -1,9 +1,9 @@
 # OMI-TED v2 — LLM and translation config.
 # Provider is a config swap, never a code change. See backend/services/llm_router.py (M5).
 llm:
-  provider: sarvam        # sarvam | google | openrouter | local
-  model: sarvam-translate
-  timeout_s: 30
+  provider: openrouter    # sarvam | google | openrouter | indictrans2 (config swap, no code change)
+  model: anthropic/claude-haiku-4.5   # OpenRouter slug; swap freely (google/gemini-3.5-flash, openai/gpt-4o-mini, ...)
+  timeout_s: 60
   cache: true             # skip API call if same te_text already translated
 
 content_type:
@@ -42,6 +42,11 @@ models:
   synthesis_model: "qwen2.5:7b-instruct"
   reranker_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
   reranker_max_length: 512
+  # LLM-agnostic RAG generation routing. ollama = local/free (slow on CPU, ~77s),
+  # openrouter = paid/fast (sub-5s). openrouter_model is the slug used for either step.
+  synthesis_provider: "openrouter"   # ollama | openrouter
+  rewrite_provider: "openrouter"     # ollama | openrouter
+  openrouter_model: "anthropic/claude-haiku-4.5"
 
 # RAG pipeline settings
 rag_pipeline:
