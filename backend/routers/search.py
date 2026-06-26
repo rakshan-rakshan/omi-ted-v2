@@ -8,6 +8,7 @@ GET  /api/v1/models/reranker — reranker availability check
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -181,11 +182,24 @@ async def advanced_ask_endpoint(
     body: AskRequest,
     session: AsyncSession = Depends(get_session),
 ) -> AdvancedAskResponse:
-    result = await multi_step_rag(
-        query=body.query,
-        session=session,
-        filters=body.filters.model_dump() if body.filters else None,
-    )
+    # Server-side timeout so a hung provider can never strand a request for minutes.
+    try:
+        result = await asyncio.wait_for(
+            multi_step_rag(
+                query=body.query,
+                session=session,
+                filters=body.filters.model_dump() if body.filters else None,
+            ),
+            timeout=30,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("ask/advanced timed out (>30s) for query: %s", body.query)
+        return AdvancedAskResponse(
+            answer="I don't have enough context to answer that question.",
+            context="",
+            sources=[],
+            rewritten_query=None,
+        )
 
     source_lookup = {s.get("chunk_id", 0): s for s in result.get("sources", [])}
     sources = [

@@ -18,7 +18,9 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
+from database import AsyncSessionLocal
 from services.context_builder import build_context
+from services.embeddings import embed_query
 from services.hybrid_search import hybrid_search, SearchResult
 from services.model_router import model_router
 from services.query_rewriter import rewrite_query
@@ -97,6 +99,22 @@ async def _log_query(
         logger.debug("Failed to log query: %s", e)
 
 
+async def _search_term(
+    term: str,
+    embedding: list[float] | None,
+    filters: dict | None,
+    top_k: int,
+) -> list[SearchResult]:
+    """Run one hybrid search in its own short-lived session.
+
+    Each parallel search must use a distinct AsyncSession — SQLAlchemy forbids
+    concurrent operations on a single session, which previously made every
+    /ask/advanced call hang ~180s.
+    """
+    async with AsyncSessionLocal() as s:
+        return await hybrid_search(s, term, embedding, filters=filters, top_k=top_k)
+
+
 async def multi_step_rag(
     query: str,
     session: AsyncSession,
@@ -135,9 +153,12 @@ async def multi_step_rag(
             rewritten_query = None
 
     # Step 2: Embed all search terms + parallel hybrid search
-    embedding = await model_router.embed(query)
+    # Use embed_query (sentence-transformers e5-base) so query vectors live in the
+    # same space as the corpus (embed_all_chunks.py uses the same model).
+    embedding = await embed_query(query)
+    # Each parallel search gets its own session — see _search_term.
     search_tasks = [
-        hybrid_search(session, term, embedding, filters=filters, top_k=settings.rag.top_k_search)
+        _search_term(term, embedding, filters, settings.rag.top_k_search)
         for term in rewritten_terms
     ]
     try:
@@ -215,7 +236,7 @@ async def single_step_rag(
     t0 = time.monotonic()
     lang = language or _detect_language(query)
 
-    embedding = await model_router.embed(query)
+    embedding = await embed_query(query)
     results = await hybrid_search(session, query, embedding, filters=filters, top_k=settings.rag.top_k_ask)
 
     context_str = _build_fallback_context(results)

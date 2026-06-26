@@ -59,8 +59,10 @@ async def _keyword_only(
     """Fallback: keyword-only search when embeddings unavailable."""
     import sqlalchemy as sa
 
-    conditions = ["c.chunk_text LIKE :q", "c.language_code = :lang"]
-    params = {"q": f"%{query_text}%", "top_k": top_k, "lang": lang}
+    # No language_code gate: corpus is single-language but users query cross-lingually
+    # (EN + TE). Relevance is handled by the multilingual embedder + reranker.
+    conditions = ["c.chunk_text LIKE :q"]
+    params = {"q": f"%{query_text}%", "top_k": top_k}
     if filters:
         if filters.get("speaker"):
             conditions.append("v.channel LIKE :speaker")
@@ -100,7 +102,8 @@ async def _pg_hybrid(
 
     emb_str = ",".join(str(v) for v in query_embedding)
 
-    conditions = ["c.language_code = :lang"]
+    # No language_code gate — cross-lingual retrieval (see _keyword_only).
+    conditions = ["TRUE"]
     if filters:
         if filters.get("speaker"):
             conditions.append("m.title ILIKE :speaker_pattern")
@@ -153,7 +156,6 @@ async def _pg_hybrid(
         "top_k": top_k,
         "rrf_k": rrf_k,
         "rrf_k2": rrf_k,
-        "lang": lang,
     }
     if filters:
         if filters.get("speaker"):
@@ -192,8 +194,9 @@ async def _sqlite_hybrid(
 
     emb_arr = np.array(query_embedding)
 
-    conditions = ["c.language_code = :lang"]
-    params: dict = {"lang": lang}
+    # No language_code gate — cross-lingual retrieval (see _keyword_only).
+    conditions = ["1=1"]
+    params: dict = {}
     if filters:
         if filters.get("speaker"):
             conditions.append("v.channel LIKE :speaker")
