@@ -39,7 +39,7 @@ export default function ProgressPage() {
         <>
           {/* Quality tier cards */}
           <motion.div variants={stagger} initial="hidden" animate="show"
-            style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            className="grid-auto" style={{ gap: 16 }}>
             {[
               { label: "Your edits",       n: data.gold_segments,   pct: data.gold_pct,   color: "var(--rose)",  bg: "var(--rose-light)",  border: "var(--rose-border)",  desc: "Human-verified · gold quality" },
               { label: "Auto-translated",  n: data.silver_segments, pct: data.silver_pct, color: "var(--amber)", bg: "var(--amber-light)", border: "var(--amber-border)", desc: "Machine only · review before using" },
@@ -107,8 +107,8 @@ export default function ProgressPage() {
                 Most frequent Telugu words in your human edits. Same word translated differently across segments is flagged.
                 Multiple meanings can be intentional — check and confirm in the editor.
               </p>
-              <div style={{ background: "var(--white)", border: "1px solid var(--gray-200)", borderRadius: 12, overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <div className="scroll-x" style={{ background: "var(--white)", border: "1px solid var(--gray-200)", borderRadius: 12 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 520 }}>
                   <thead>
                     <tr style={{ background: "var(--gray-50)", borderBottom: "1px solid var(--gray-200)" }}>
                       {["Word", "In segments", "Your translations", ""].map(h => (

@@ -10,6 +10,7 @@ interface SearchResult {
   message_id: number;
   score: number;
   video: { youtube_id: string; title: string; channel: string };
+  start_time?: number | null;
 }
 interface SearchResponse { results: SearchResult[]; total: number }
 
@@ -18,6 +19,7 @@ interface AskSource {
   chunk_id: number;
   chunk_text: string;
   video: { youtube_id: string; title: string; channel: string };
+  start_time?: number | null;
 }
 interface AskResponse {
   answer: string;
@@ -25,8 +27,24 @@ interface AskResponse {
   search_latency_ms: number;
   generation_latency_ms: number;
 }
+interface AdvancedAskResponse {
+  answer: string;
+  context: string;
+  sources: AskSource[];
+  rewritten_query: { terms?: { term: string }[] } | null;
+}
 
-type Mode = "search" | "ask";
+type Mode = "search" | "ask" | "ask_advanced";
+
+function ytLink(youtubeId: string, startTime?: number | null) {
+  const base = `https://youtube.com/watch?v=${youtubeId}`;
+  return startTime != null && startTime > 0 ? `${base}&t=${Math.floor(startTime)}s` : base;
+}
+function fmtTime(t?: number | null) {
+  if (t == null) return "";
+  const s = Math.floor(t);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
 
 export default function SearchPage() {
   const [mode, setMode] = useState<Mode>("search");
@@ -36,6 +54,7 @@ export default function SearchPage() {
 
   const [searchResults, setSearchResults] = useState<SearchResponse | null>(null);
   const [askResult, setAskResult] = useState<AskResponse | null>(null);
+  const [advancedResult, setAdvancedResult] = useState<AdvancedAskResponse | null>(null);
 
   const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,6 +64,7 @@ export default function SearchPage() {
     setError(null);
     setSearchResults(null);
     setAskResult(null);
+    setAdvancedResult(null);
     try {
       const { data } = await axios.post<SearchResponse>("/api/v1/search", { query: q, top_k: 10 });
       setSearchResults(data);
@@ -64,9 +84,30 @@ export default function SearchPage() {
     setError(null);
     setSearchResults(null);
     setAskResult(null);
+    setAdvancedResult(null);
     try {
       const { data } = await axios.post<AskResponse>("/api/v1/ask", { query: q });
       setAskResult(data);
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err) ? err.response?.data?.detail ?? err.message : String(err);
+      setError(typeof msg === "string" ? msg : JSON.stringify(msg));
+    } finally {
+      setLoading(false);
+    }
+  }, [query]);
+
+  const handleAskAdvanced = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = query.trim();
+    if (!q) return;
+    setLoading(true);
+    setError(null);
+    setSearchResults(null);
+    setAskResult(null);
+    setAdvancedResult(null);
+    try {
+      const { data } = await axios.post<AdvancedAskResponse>("/api/v1/ask/advanced", { query: q });
+      setAdvancedResult(data);
     } catch (err: unknown) {
       const msg = axios.isAxiosError(err) ? err.response?.data?.detail ?? err.message : String(err);
       setError(typeof msg === "string" ? msg : JSON.stringify(msg));
@@ -81,6 +122,7 @@ export default function SearchPage() {
     setError(null);
     setSearchResults(null);
     setAskResult(null);
+    setAdvancedResult(null);
   }
 
   return (
@@ -92,18 +134,20 @@ export default function SearchPage() {
           Explore · Query · Discover
         </p>
         <h1 className="font-display" style={{ fontSize: 36, color: "var(--ink)", lineHeight: 1.15, letterSpacing: "-0.02em", marginBottom: 8 }}>
-          {mode === "search" ? "Semantic Search" : "Ask a Question"}
+          {mode === "search" ? "Semantic Search" : mode === "ask" ? "Ask a Question" : "Ask+ · Advanced RAG"}
         </h1>
         <p style={{ fontSize: 15, color: "var(--ink-2)", maxWidth: 520 }}>
           {mode === "search"
             ? "Find relevant sermon passages across the entire translation dataset."
-            : "Ask anything about the sermons and get an answer with cited sources."}
+            : mode === "ask"
+            ? "Ask anything about the sermons and get an answer with cited sources."
+            : "Multi-step retrieval — query rewriting, reranking, and synthesis with timestamped sources."}
         </p>
       </motion.div>
 
       {/* Mode toggle */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.08 }} style={{ display: "flex", gap: 4, padding: 4, background: "var(--warm-100)", borderRadius: 10, width: "fit-content" }}>
-        {([["search", "Search"], ["ask", "Ask"]] as const).map(([m, label]) => (
+        {([["search", "Search"], ["ask", "Ask"], ["ask_advanced", "Ask+"]] as const).map(([m, label]) => (
           <button key={m} onClick={() => handleModeSwitch(m)} style={{
             padding: "8px 20px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer",
             fontFamily: "Plus Jakarta Sans, DM Sans, sans-serif",
@@ -119,7 +163,7 @@ export default function SearchPage() {
 
       {/* Input form */}
       <motion.form
-        onSubmit={mode === "search" ? handleSearch : handleAsk}
+        onSubmit={mode === "search" ? handleSearch : mode === "ask" ? handleAsk : handleAskAdvanced}
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.14 }}
@@ -226,9 +270,9 @@ export default function SearchPage() {
                     {r.chunk_text.length > 200 ? r.chunk_text.slice(0, 200) + "…" : r.chunk_text}
                   </p>
                   <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 12 }}>
-                    <Link href={`https://youtube.com/watch?v=${r.video.youtube_id}`} target="_blank" rel="noopener noreferrer"
+                    <Link href={ytLink(r.video.youtube_id, r.start_time)} target="_blank" rel="noopener noreferrer"
                       style={{ fontSize: 12, fontWeight: 600, color: "var(--rose)", textDecoration: "none" }}>
-                      Watch on YouTube ↗
+                      {r.start_time != null ? `Watch at ${fmtTime(r.start_time)} ↗` : "Watch on YouTube ↗"}
                     </Link>
                     <span style={{ fontSize: 11, color: "var(--ink-4)", fontFamily: "JetBrains Mono, monospace" }}>
                       {r.video.youtube_id}
@@ -293,9 +337,88 @@ export default function SearchPage() {
                       {s.chunk_text.length > 200 ? s.chunk_text.slice(0, 200) + "…" : s.chunk_text}
                     </p>
                     <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10 }}>
-                      <Link href={`https://youtube.com/watch?v=${s.video.youtube_id}`} target="_blank" rel="noopener noreferrer"
+                      <Link href={ytLink(s.video.youtube_id, s.start_time)} target="_blank" rel="noopener noreferrer"
                         style={{ fontSize: 12, fontWeight: 600, color: "var(--rose)", textDecoration: "none" }}>
-                        Watch on YouTube ↗
+                        {s.start_time != null ? `Watch at ${fmtTime(s.start_time)} ↗` : "Watch on YouTube ↗"}
+                      </Link>
+                      <span style={{ fontSize: 11, color: "var(--ink-4)", fontFamily: "JetBrains Mono, monospace" }}>
+                        {s.video.youtube_id}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* Advanced ask result */}
+      {!loading && advancedResult && (
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 680 }}>
+
+          {/* Answer */}
+          <div style={{
+            background: "var(--white)", borderRadius: 14, padding: "24px 28px",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06)",
+            border: "1px solid var(--warm-200)",
+          }}>
+            <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", color: "var(--gold)", textTransform: "uppercase", marginBottom: 10 }}>
+              Answer · Advanced RAG
+            </p>
+            <p style={{ fontSize: 15, color: "var(--ink)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+              {advancedResult.answer}
+            </p>
+          </div>
+
+          {/* Rewritten query terms */}
+          {advancedResult.rewritten_query?.terms && advancedResult.rewritten_query.terms.length > 0 && (
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-3)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 10 }}>
+                Searched for
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {advancedResult.rewritten_query.terms.map((t, i) => (
+                  <span key={i} style={{ fontSize: 12, fontWeight: 500, padding: "5px 12px", borderRadius: 20, background: "var(--warm-100)", color: "var(--ink-2)" }}>
+                    {t.term}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Sources */}
+          {advancedResult.sources.length > 0 && (
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-3)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 12 }}>
+                Sources ({advancedResult.sources.length})
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {advancedResult.sources.map((s) => (
+                  <div key={s.chunk_id} style={{
+                    background: "var(--white)", borderRadius: 10, padding: "14px 18px",
+                    boxShadow: "var(--shadow-card)", border: "1px solid var(--warm-200)",
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
+                        {s.video.title || "Untitled"}
+                      </p>
+                      <span style={{ fontSize: 11, color: "var(--ink-4)", fontFamily: "JetBrains Mono, monospace" }}>
+                        #{s.index}
+                      </span>
+                    </div>
+                    {s.chunk_text && (
+                      <p style={{
+                        fontSize: 12, color: "var(--ink-2)", lineHeight: 1.5,
+                        display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+                      }}>
+                        {s.chunk_text.length > 200 ? s.chunk_text.slice(0, 200) + "…" : s.chunk_text}
+                      </p>
+                    )}
+                    <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10 }}>
+                      <Link href={ytLink(s.video.youtube_id, s.start_time)} target="_blank" rel="noopener noreferrer"
+                        style={{ fontSize: 12, fontWeight: 600, color: "var(--rose)", textDecoration: "none" }}>
+                        {s.start_time != null ? `Watch at ${fmtTime(s.start_time)} ↗` : "Watch on YouTube ↗"}
                       </Link>
                       <span style={{ fontSize: 11, color: "var(--ink-4)", fontFamily: "JetBrains Mono, monospace" }}>
                         {s.video.youtube_id}
@@ -310,7 +433,7 @@ export default function SearchPage() {
       )}
 
       {/* Empty state */}
-      {!loading && !error && !searchResults && !askResult && (
+      {!loading && !error && !searchResults && !askResult && !advancedResult && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
           style={{ padding: "64px 0", textAlign: "center" }}>
           <p className="font-display" style={{ fontSize: 18, color: "var(--ink-3)", marginBottom: 6 }}>

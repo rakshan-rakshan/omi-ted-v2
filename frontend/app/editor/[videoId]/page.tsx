@@ -7,6 +7,7 @@ import axios from "axios";
 import { motion, AnimatePresence } from "motion/react";
 import YouTubePlayer, { YouTubePlayerHandle } from "@/components/YouTubePlayer";
 import SegmentMicInput from "@/components/SegmentMicInput";
+import GlossaryTools from "@/components/GlossaryTools";
 import {
   EditorBulkToolbar,
   EditorHelpOverlay,
@@ -62,7 +63,7 @@ function FullTextMode({ videoId, seekTo }: { videoId: string; seekTo: (seconds: 
   );
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0, height: "calc(100vh - 140px)", border: "1px solid var(--gray-200)", borderRadius: 12, overflow: "hidden" }}>
+    <div className="editor-split" style={{ gap: 0, border: "1px solid var(--gray-200)", borderRadius: 12, overflow: "hidden" }}>
       {/* Left: Telugu */}
       <div style={{ padding: "24px 28px", overflowY: "auto", borderRight: "1px solid var(--gray-200)", background: "var(--white)" }}>
         <p style={{ fontSize: 11, fontWeight: 600, color: "var(--rose)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 16 }}>
@@ -702,6 +703,7 @@ export default function EditorPage() {
             }}>
             {translating ? "Translating…" : "✦ Auto-translate"}
           </motion.button>
+          <GlossaryTools videoId={videoId} />
         </div>
       </div>
 

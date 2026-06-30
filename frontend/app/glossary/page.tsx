@@ -8,9 +8,12 @@ interface GlossaryTerm {
   id: number;
   te_term: string;
   en_term: string;
+  meanings: string[];
   category: string;
   notes: string | null;
 }
+
+const meaningsOf = (t: GlossaryTerm) => (t.meanings && t.meanings.length ? t.meanings : [t.en_term]);
 
 const CATEGORIES = ["all", "theology", "name", "place", "general"] as const;
 type Category = typeof CATEGORIES[number];
@@ -63,15 +66,16 @@ export default function GlossaryPage() {
   const displayed = terms.filter(t => {
     const matchCat = filterCat === "all" || t.category === filterCat;
     const q = search.toLowerCase();
-    const matchSearch = !q || t.te_term.toLowerCase().includes(q) || t.en_term.toLowerCase().includes(q);
+    const matchSearch = !q || t.te_term.toLowerCase().includes(q) || meaningsOf(t).join(" ").toLowerCase().includes(q);
     return matchCat && matchSearch;
   });
 
   async function addTerm() {
-    if (!newTe.trim() || !newEn.trim()) return;
+    const meanings = newEn.split(",").map(s => s.trim()).filter(Boolean);
+    if (!newTe.trim() || !meanings.length) return;
     setAdding(true); setAddError(null);
     try {
-      await axios.post("/api/v1/glossary", { te_term: newTe.trim(), en_term: newEn.trim(), category: newCat, notes: newNotes || null });
+      await axios.post("/api/v1/glossary", { te_term: newTe.trim(), meanings, category: newCat, notes: newNotes || null });
       mutate();
       setNewTe(""); setNewEn(""); setNewNotes(""); setAddOpen(false);
     } catch (e: unknown) {
@@ -81,14 +85,16 @@ export default function GlossaryPage() {
   }
 
   function startEdit(t: GlossaryTerm) {
-    setEditingId(t.id); setEditEn(t.en_term); setEditNotes(t.notes ?? ""); setEditCat(t.category);
+    setEditingId(t.id); setEditEn(meaningsOf(t).join(", ")); setEditNotes(t.notes ?? ""); setEditCat(t.category);
   }
 
   async function saveEdit() {
     if (!editingId) return;
+    const meanings = editEn.split(",").map(s => s.trim()).filter(Boolean);
+    if (!meanings.length) return;
     setSaving(true);
     try {
-      await axios.patch(`/api/v1/glossary/${editingId}`, { en_term: editEn.trim(), notes: editNotes || null, category: editCat });
+      await axios.patch(`/api/v1/glossary/${editingId}`, { meanings, notes: editNotes || null, category: editCat });
       mutate();
       setEditingId(null);
     } catch (e) { console.error(e); }
@@ -137,9 +143,9 @@ export default function GlossaryPage() {
                   style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--gray-200)", fontSize: 14, fontFamily: "'Noto Sans Telugu', sans-serif", color: "var(--gray-900)", outline: "none" }} />
               </div>
               <div>
-                <label style={{ fontSize: 11, color: "var(--gray-500)", display: "block", marginBottom: 4 }}>English translation *</label>
+                <label style={{ fontSize: 11, color: "var(--gray-500)", display: "block", marginBottom: 4 }}>English meanings * (comma-separated)</label>
                 <input value={newEn} onChange={e => setNewEn(e.target.value)}
-                  placeholder="Lord"
+                  placeholder="Lord, Master"
                   style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--gray-200)", fontSize: 13, color: "var(--gray-900)", outline: "none" }} />
               </div>
               <div>
@@ -210,12 +216,12 @@ export default function GlossaryPage() {
       )}
 
       {displayed.length > 0 && (
-        <div style={{ background: "var(--white)", border: "1px solid var(--gray-200)", borderRadius: 12, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="scroll-x" style={{ background: "var(--white)", border: "1px solid var(--gray-200)", borderRadius: 12, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 620 }}>
             <thead>
               <tr style={{ background: "var(--gray-50)", borderBottom: "1px solid var(--gray-200)" }}>
                 <th style={{ padding: "10px 16px", fontSize: 11, fontWeight: 600, color: "var(--gray-400)", textAlign: "left", textTransform: "uppercase", letterSpacing: "0.06em" }}>Telugu</th>
-                <th style={{ padding: "10px 16px", fontSize: 11, fontWeight: 600, color: "var(--gray-400)", textAlign: "left", textTransform: "uppercase", letterSpacing: "0.06em" }}>English</th>
+                <th style={{ padding: "10px 16px", fontSize: 11, fontWeight: 600, color: "var(--gray-400)", textAlign: "left", textTransform: "uppercase", letterSpacing: "0.06em" }}>English meanings</th>
                 <th style={{ padding: "10px 16px", fontSize: 11, fontWeight: 600, color: "var(--gray-400)", textAlign: "left", textTransform: "uppercase", letterSpacing: "0.06em" }}>Category</th>
                 <th style={{ padding: "10px 16px", fontSize: 11, fontWeight: 600, color: "var(--gray-400)", textAlign: "left", textTransform: "uppercase", letterSpacing: "0.06em" }}>Notes</th>
                 <th style={{ padding: "10px 16px", width: 100 }}></th>
@@ -232,9 +238,14 @@ export default function GlossaryPage() {
                   <td style={{ padding: "12px 16px", verticalAlign: "top" }}>
                     {editingId === term.id ? (
                       <input value={editEn} onChange={e => setEditEn(e.target.value)}
+                        placeholder="Lord, Master"
                         style={{ padding: "6px 10px", borderRadius: 7, border: "1px solid var(--rose-border)", fontSize: 13, color: "var(--gray-900)", outline: "none", width: "100%" }} />
                     ) : (
-                      <span style={{ fontSize: 13, color: "var(--gray-800)" }}>{term.en_term}</span>
+                      <span style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                        {meaningsOf(term).map((m, i) => (
+                          <span key={i} style={{ fontSize: 12, color: i === 0 ? "var(--gray-900)" : "var(--gray-600)", fontWeight: i === 0 ? 600 : 400, background: "var(--gray-100)", borderRadius: 6, padding: "2px 8px" }}>{m}</span>
+                        ))}
+                      </span>
                     )}
                   </td>
                   <td style={{ padding: "12px 16px", verticalAlign: "top" }}>

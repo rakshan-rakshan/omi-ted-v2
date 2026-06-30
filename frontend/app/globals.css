@@ -68,6 +68,8 @@
   --gold-light:     #FFF1F2;
 }
 
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
 body {
@@ -83,3 +85,57 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 3px; }
 *:focus-visible { outline: 2px solid var(--rose); outline-offset: 2px; }
 ::selection { background: var(--rose-light); }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Responsive app shell (web / tablet / mobile). Sidebar collapses into a
+   slide-in drawer behind a top bar on small screens.
+   ───────────────────────────────────────────────────────────────────────── */
+.app-shell { display: flex; min-height: 100vh; }
+
+.app-sidebar {
+  width: 200px; flex-shrink: 0; min-height: 100vh; background: var(--white);
+  border-right: 1px solid var(--gray-200); display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100vh; z-index: 40;
+}
+.app-topbar { display: none; }
+.app-backdrop { display: none; }
+.app-main { flex: 1; min-width: 0; }
+.app-main-inner { padding: 28px 32px; max-width: 1200px; width: 100%; }
+
+/* horizontal-scroll wrapper for wide tables on small screens */
+.scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* editor full-text split — two columns on desktop, stacked on mobile */
+.editor-split { display: grid; grid-template-columns: 1fr 1fr; height: calc(100vh - 140px); }
+
+/* auto-fitting card grid (stats etc.) — collapses columns by available width */
+.grid-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+
+@media (max-width: 767px) {
+  .editor-split { grid-template-columns: 1fr; height: auto; }
+  .editor-split > div { max-height: 56vh; border-right: none !important; }
+  .editor-split > div:first-child { border-bottom: 1px solid var(--gray-200); }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .app-main-inner { padding: 22px 20px; }
+}
+
+@media (max-width: 767px) {
+  .app-topbar {
+    display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+    background: var(--white); border-bottom: 1px solid var(--gray-200);
+    position: sticky; top: 0; z-index: 30;
+  }
+  .app-sidebar {
+    position: fixed; left: 0; top: 0; height: 100dvh; transform: translateX(-100%);
+    transition: transform 0.22s ease; box-shadow: 2px 0 18px rgba(0,0,0,0.14);
+  }
+  .app-sidebar.open { transform: translateX(0); }
+  .app-backdrop.open {
+    display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 35;
+  }
+  .app-main-inner { padding: 16px 13px; }
+  /* keep big display headings from overflowing on phones */
+  .font-display { letter-spacing: -0.01em; }
+}
