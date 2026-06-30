@@ -25,7 +25,7 @@ def _read_env() -> dict[str, str]:
     result: dict[str, str] = {}
     if not ENV_PATH.exists():
         return result
-    for line in ENV_PATH.read_text().splitlines():
+    for line in ENV_PATH.read_text(encoding="utf-8", errors="replace").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
@@ -37,7 +37,7 @@ def _read_env() -> dict[str, str]:
 
 def _write_env(data: dict[str, str]) -> None:
     """Write .env file, preserving comments and unknown lines."""
-    existing_lines = ENV_PATH.read_text().splitlines() if ENV_PATH.exists() else []
+    existing_lines = ENV_PATH.read_text(encoding="utf-8", errors="replace").splitlines() if ENV_PATH.exists() else []
     written_keys: set[str] = set()
     new_lines: list[str] = []
 
@@ -61,7 +61,7 @@ def _write_env(data: dict[str, str]) -> None:
         if k not in written_keys and v:
             new_lines.append(f"{k}={v}")
 
-    ENV_PATH.write_text("\n".join(new_lines) + "\n")
+    ENV_PATH.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 
 
 class SettingsResponse(BaseModel):

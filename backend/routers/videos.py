@@ -13,7 +13,7 @@ from math import ceil
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_session
@@ -34,6 +34,7 @@ class VideoSummary(BaseModel):
     duration_s: int | None
     status: str
     segment_count: int
+    translated_count: int = 0
     fetched_at: str | None
     error_msg: str | None = None
 
@@ -72,6 +73,19 @@ class SegmentPatch(BaseModel):
     quality_score: int | None = None
 
 
+class GlossaryCandidate(BaseModel):
+    te_term: str
+    meanings: list[str]
+    category: str
+    sources: list[str]
+
+
+class GlossaryExtractResponse(BaseModel):
+    youtube_id: str
+    count: int
+    candidates: list[GlossaryCandidate]
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -92,10 +106,16 @@ async def list_videos(
         .scalar_subquery()
     )
 
+    translated_expr = func.coalesce(
+        func.sum(case((and_(Segment.en_final.isnot(None), Segment.en_final != ""), 1), else_=0)),
+        0,
+    ).label("translated_count")
+
     result = await session.execute(
         select(
             Video,
             func.count(Segment.id).label("segment_count"),
+            translated_expr,
             error_msg_subq.label("error_msg"),
         )
         .outerjoin(Segment, Segment.video_id == Video.id)
@@ -112,10 +132,11 @@ async def list_videos(
             duration_s=video.duration_s,
             status=video.status,
             segment_count=count,
+            translated_count=int(translated or 0),
             fetched_at=video.fetched_at.isoformat() if video.fetched_at else None,
             error_msg=error_msg,
         )
-        for video, count, error_msg in rows
+        for video, count, translated, error_msg in rows
     ]
 
 
@@ -177,6 +198,47 @@ async def get_segments(
         page_size=page_size,
         total_pages=ceil(total / page_size) if total else 1,
         items=[SegmentResponse.model_validate(s) for s in segments],
+    )
+
+
+@router.post("/videos/{youtube_id}/glossary/extract", response_model=GlossaryExtractResponse)
+async def extract_video_glossary(
+    youtube_id: str,
+    methods: str = "llm,heuristic",
+    session: AsyncSession = Depends(get_session),
+) -> GlossaryExtractResponse:
+    """One-click: scan a fetched video's text and return candidate glossary terms
+    (each with one or many English meanings) for review. Does NOT save — the UI
+    bulk-saves selected candidates via POST /api/v1/glossary/bulk."""
+    video = (
+        await session.execute(select(Video).where(Video.youtube_id == youtube_id))
+    ).scalar_one_or_none()
+    if video is None:
+        raise HTTPException(status_code=404, detail=f"Video {youtube_id} not found.")
+    if video.status != "fetched":
+        raise HTTPException(status_code=409, detail=f"Video is not ready (status={video.status}).")
+
+    seg_result = await session.execute(
+        select(Segment).where(Segment.video_id == video.id).order_by(Segment.segment_index)
+    )
+    segments = seg_result.scalars().all()
+    te_text = "\n".join(s.te_original for s in segments if s.te_original)
+    en_text = "\n".join((s.en_final or s.en_auto or "") for s in segments)
+
+    method_set = {m.strip().lower() for m in methods.split(",") if m.strip()} or {"llm", "heuristic"}
+    from services.glossary_extract import extract_glossary
+    candidates = await extract_glossary(te_text, en_text, method_set)
+
+    return GlossaryExtractResponse(
+        youtube_id=youtube_id,
+        count=len(candidates),
+        candidates=[
+            GlossaryCandidate(
+                te_term=c["te_term"], meanings=c["meanings"],
+                category=c["category"], sources=c["sources"],
+            )
+            for c in candidates
+        ],
     )
 
 

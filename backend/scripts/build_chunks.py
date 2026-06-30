@@ -58,6 +58,7 @@ async def build_all_chunks() -> int:
                     "id": s.id,
                     "text": s.en_final or s.en_auto or "",
                     "segment_index": s.segment_index,
+                    "start_time": s.start_time,
                 }
                 for s in segments
                 if s.en_final or s.en_auto
@@ -84,6 +85,7 @@ async def build_all_chunks() -> int:
                     chunk_text=c.chunk_text,
                     language_code=c.language_code,
                     token_count=c.token_count,
+                    start_time=c.start_time,
                 ))
 
             total_chunks += len(chunks)

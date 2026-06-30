@@ -5,6 +5,16 @@ llm:
   model: anthropic/claude-haiku-4.5   # OpenRouter slug; swap freely (google/gemini-3.5-flash, openai/gpt-4o-mini, ...)
   timeout_s: 60
   cache: true             # skip API call if same te_text already translated
+  retry_attempts: 4       # transient-error retries (429/5xx/timeout) before giving up
+  retry_base_s: 1.0       # exponential backoff base
+  retry_cap_s: 20.0       # max backoff per attempt
+  concurrency: 5          # segments translated in parallel within one video
+  batch_size: 1           # segments per API call (1 = per-segment; 8-15 batches OpenRouter)
+  inr_per_usd: 83         # exchange rate for Sarvam cost estimate (INR → USD conversion)
+
+translate_run:
+  video_concurrency: 2    # videos translated in parallel during a bulk run
+  pace_s: 0.0             # seconds to wait between videos (0 = none)
 
 content_type:
   song_max_words: 5       # heuristic: segments with <= N words may be song lyrics

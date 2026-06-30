@@ -48,9 +48,11 @@ def _build_citations(chunks: list[SearchResult]) -> list[dict]:
         {
             "index": i + 1,
             "chunk_id": c.chunk_id,
+            "chunk_text": c.chunk_text,
             "title": c.title,
             "youtube_id": c.youtube_id,
             "channel": c.channel,
+            "start_time": c.start_time,
             "score": c.score,
         }
         for i, c in enumerate(chunks)

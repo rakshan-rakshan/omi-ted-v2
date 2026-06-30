@@ -19,6 +19,16 @@ def _detect_language(text: str) -> str:
     return "te" if te_chars > len(text) * 0.3 else "en"
 
 
+def _message_ids_clause(filters: dict | None) -> tuple[str | None, dict]:
+    """Parameterized `c.message_id IN (...)` clause for notebook scoping (empty -> no clause)."""
+    ids = (filters or {}).get("message_ids")
+    if not ids:
+        return None, {}
+    keys = [f"mid_{i}" for i in range(len(ids))]
+    clause = "c.message_id IN (" + ",".join(f":{k}" for k in keys) + ")"
+    return clause, {k: v for k, v in zip(keys, ids)}
+
+
 @dataclass
 class SearchResult:
     chunk_id: int
@@ -28,6 +38,7 @@ class SearchResult:
     youtube_id: str
     title: str
     channel: str
+    start_time: float | None = None
 
 
 async def hybrid_search(
@@ -71,9 +82,14 @@ async def _keyword_only(
             conditions.append("c.scripture_refs LIKE :book")
             params["book"] = f"%{filters['book']}%"
 
+    mid_clause, mid_params = _message_ids_clause(filters)
+    if mid_clause:
+        conditions.append(mid_clause)
+        params.update(mid_params)
+
     where = " AND ".join(conditions)
     sql = f"""
-        SELECT c.id, c.chunk_text, c.message_id, m.title, v.youtube_id, v.channel
+        SELECT c.id, c.chunk_text, c.message_id, c.start_time, m.title, v.youtube_id, v.channel
         FROM chunks c
         JOIN messages m ON m.id = c.message_id
         JOIN videos v ON v.id = m.video_id
@@ -84,7 +100,8 @@ async def _keyword_only(
     rows = result.all()
     return [
         SearchResult(chunk_id=r.id, chunk_text=r.chunk_text, message_id=r.message_id,
-                     score=1.0, youtube_id=r.youtube_id, title=r.title, channel=r.channel)
+                     score=1.0, youtube_id=r.youtube_id, title=r.title, channel=r.channel,
+                     start_time=r.start_time)
         for r in rows
     ]
 
@@ -110,9 +127,13 @@ async def _pg_hybrid(
         if filters.get("book"):
             conditions.append("c.scripture_refs ILIKE :book_pattern")
 
+    mid_clause, mid_params = _message_ids_clause(filters)
+    if mid_clause:
+        conditions.append(mid_clause)
+
     sql = f"""
     WITH semantic AS (
-        SELECT c.id, c.chunk_text, c.message_id,
+        SELECT c.id, c.chunk_text, c.message_id, c.start_time,
                1 - (c.embedding <=> ARRAY[{emb_str}]::vector) AS score,
                m.title, m.description, v.youtube_id, v.channel
         FROM chunks c
@@ -123,7 +144,7 @@ async def _pg_hybrid(
         LIMIT :top_k
     ),
     keyword AS (
-        SELECT c.id, c.chunk_text, c.message_id,
+        SELECT c.id, c.chunk_text, c.message_id, c.start_time,
                ts_rank(to_tsvector('simple', c.chunk_text), plainto_tsquery('simple', :query)) AS score,
                m.title, m.description, v.youtube_id, v.channel
         FROM chunks c
@@ -135,7 +156,7 @@ async def _pg_hybrid(
         LIMIT :top_k
     ),
     fused AS (
-        SELECT id, chunk_text, message_id, youtube_id, title, channel,
+        SELECT id, chunk_text, message_id, start_time, youtube_id, title, channel,
                COALESCE(1.0 / (:rrf_k + ROW_NUMBER() OVER (ORDER BY semantic.score DESC)), 0) +
                COALESCE(1.0 / (:rrf_k2 + ROW_NUMBER() OVER (ORDER BY keyword.score DESC)), 0) AS rrf_score
         FROM (
@@ -144,9 +165,9 @@ async def _pg_hybrid(
             SELECT * FROM keyword
         ) sub
     )
-    SELECT id, chunk_text, message_id, youtube_id, title, channel, MAX(rrf_score) AS score
+    SELECT id, chunk_text, message_id, start_time, youtube_id, title, channel, MAX(rrf_score) AS score
     FROM fused
-    GROUP BY id, chunk_text, message_id, youtube_id, title, channel
+    GROUP BY id, chunk_text, message_id, start_time, youtube_id, title, channel
     ORDER BY score DESC
     LIMIT :top_k
     """
@@ -162,6 +183,7 @@ async def _pg_hybrid(
             params["speaker_pattern"] = f"%{filters['speaker']}%"
         if filters.get("book"):
             params["book_pattern"] = f"%{filters['book']}%"
+    params.update(mid_params)
 
     result = await session.execute(text(sql), params)
     rows = result.all()
@@ -174,6 +196,7 @@ async def _pg_hybrid(
             youtube_id=r.youtube_id,
             title=r.title,
             channel=r.channel,
+            start_time=r.start_time,
         )
         for r in rows
     ]
@@ -205,10 +228,15 @@ async def _sqlite_hybrid(
             conditions.append("c.scripture_refs LIKE :book")
             params["book"] = f"%{filters['book']}%"
 
+    mid_clause, mid_params = _message_ids_clause(filters)
+    if mid_clause:
+        conditions.append(mid_clause)
+        params.update(mid_params)
+
     where_clause = " AND ".join(conditions)
 
     sql = f"""
-        SELECT c.id, c.chunk_text, c.message_id, c.embedding,
+        SELECT c.id, c.chunk_text, c.message_id, c.embedding, c.start_time,
                m.title, v.youtube_id, v.channel
         FROM chunks c
         JOIN messages m ON m.id = c.message_id
@@ -237,7 +265,7 @@ async def _sqlite_hybrid(
         scored.append((
             r.id, r.chunk_text, r.message_id,
             r.title or "", r.youtube_id or "", r.channel or "",
-            semantic_score, keyword_score,
+            semantic_score, keyword_score, r.start_time,
         ))
 
     sem_sorted = sorted(scored, key=lambda x: x[6], reverse=True)[:top_k]
@@ -252,15 +280,18 @@ async def _sqlite_hybrid(
     item_map = {s[0]: s for s in scored}
     ranked = sorted(rrf.items(), key=lambda x: x[1], reverse=True)[:top_k]
 
+    # Source every field from item_map[cid]; tuple layout is
+    # (id, chunk_text, message_id, title, youtube_id, channel, sem, kw, start_time).
     return [
         SearchResult(
-            chunk_id=item[0],
-            chunk_text=item[1],
-            message_id=item[2],
+            chunk_id=cid,
+            chunk_text=item_map[cid][1],
+            message_id=item_map[cid][2],
             score=round(rrf_score, 6),
-            youtube_id=item_map[cid][5],
+            youtube_id=item_map[cid][4],
             title=item_map[cid][3],
-            channel=item_map[cid][4],
+            channel=item_map[cid][5],
+            start_time=item_map[cid][8],
         )
         for cid, rrf_score in ranked
         if cid in item_map

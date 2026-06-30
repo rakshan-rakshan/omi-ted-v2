@@ -34,6 +34,10 @@ class Video(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False, index=True)
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    # Soft-remove ("recycle bin"): non-null scope = excluded from all active views + runs.
+    excluded_scope: Mapped[str | None] = mapped_column(String(20), index=True)  # "ingest" | "translation"
+    excluded_reason: Mapped[str | None] = mapped_column(Text)
+    excluded_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     segments: Mapped[list["Segment"]] = relationship(back_populates="video", cascade="all, delete-orphan")
     jobs: Mapped[list["Job"]] = relationship(back_populates="video", cascade="all, delete-orphan")
@@ -86,6 +90,10 @@ class GlossaryTerm(Base):
     # category: theology | name | place | general
     category: Mapped[str] = mapped_column(String(20), default="general", nullable=False, index=True)
     notes: Mapped[str | None] = mapped_column(Text)
+    # JSON-encoded list[str] of English meanings (one term -> many meanings).
+    # en_term stays the PRIMARY meaning (= meanings[0]) so GlossaryApplier's
+    # single-replacement and existing rows keep working unchanged.
+    meanings: Mapped[str | None] = mapped_column(Text)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -136,12 +144,37 @@ class Chunk(Base):
     chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
     language_code: Mapped[str] = mapped_column(String(5), default="en", nullable=False)
     token_count: Mapped[int | None] = mapped_column(Integer)
+    # Earliest source-segment start (seconds) — powers jump-to-moment citations.
+    start_time: Mapped[float | None] = mapped_column(Float)
     embedding = mapped_column("embedding", database.Vector(768), nullable=True)
 
     scripture_refs: Mapped[str | None] = mapped_column(Text)  # JSON array
     topic_tags: Mapped[str | None] = mapped_column(Text)       # JSON array
 
     message: Mapped["Message"] = relationship()
+
+
+class Notebook(Base):
+    """A user-curated collection of messages (videos) to scope Q&A to."""
+    __tablename__ = "notebooks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+
+
+class NotebookMessage(Base):
+    """Join table: which messages belong to a notebook."""
+    __tablename__ = "notebook_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    notebook_id: Mapped[int] = mapped_column(
+        ForeignKey("notebooks.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    message_id: Mapped[int] = mapped_column(
+        ForeignKey("messages.id", ondelete="CASCADE"), index=True, nullable=False
+    )
 
 
 class QueryLog(Base):
@@ -158,3 +191,37 @@ class QueryLog(Base):
     latency_ms: Mapped[int | None] = mapped_column(Integer)
     model_used: Mapped[str | None] = mapped_column(String(50))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class TranslationCostLog(Base):
+    """One row per video per translation run — records cost and token usage."""
+    __tablename__ = "translation_costs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    video_id: Mapped[int | None] = mapped_column(ForeignKey("videos.id", ondelete="SET NULL"), index=True, nullable=True)
+    run_id: Mapped[str | None] = mapped_column(String(50), index=True, nullable=True)
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(200))
+    segments: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+
+
+class TranslationErrorLog(Base):
+    """One row per translation failure — captures model, error, and cost context."""
+    __tablename__ = "translation_errors"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    video_id: Mapped[int | None] = mapped_column(ForeignKey("videos.id", ondelete="SET NULL"), index=True, nullable=True)
+    youtube_id: Mapped[str | None] = mapped_column(String(20), index=True, nullable=True)
+    run_id: Mapped[str | None] = mapped_column(String(50), index=True, nullable=True)
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(200))
+    segment_index: Mapped[int | None] = mapped_column(Integer)  # null = video-level error
+    error_type: Mapped[str] = mapped_column(String(50), nullable=False, default="exception")
+    error_msg: Mapped[str] = mapped_column(Text, nullable=False)
+    source_text: Mapped[str | None] = mapped_column(Text)  # truncated te_original snippet
+    cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)  # cost on this video's pass
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)

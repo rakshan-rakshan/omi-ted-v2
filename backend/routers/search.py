@@ -29,6 +29,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["search"])
 
 
+async def _resolve_filters(session: AsyncSession, body) -> dict | None:
+    """Merge explicit filters with notebook scoping.
+
+    When notebook_id is set, retrieval is restricted to that notebook's messages.
+    An empty notebook yields no results (sentinel id -1 matches nothing).
+    """
+    filters: dict = body.filters.model_dump() if body.filters else {}
+    nid = getattr(body, "notebook_id", None)
+    if nid is not None:
+        from routers.notebooks import notebook_message_ids
+        mids = await notebook_message_ids(session, nid)
+        filters["message_ids"] = mids or [-1]
+    return filters or None
+
+
 class SearchFilters(BaseModel):
     speaker: str | None = None
     date_from: str | None = None
@@ -40,6 +55,7 @@ class SearchRequest(BaseModel):
     query: str
     top_k: int = 20
     filters: SearchFilters | None = None
+    notebook_id: int | None = None
 
 
 class ChunkVideoInfo(BaseModel):
@@ -54,6 +70,7 @@ class SearchResultItem(BaseModel):
     message_id: int
     score: float
     video: ChunkVideoInfo
+    start_time: float | None = None
 
 
 class SearchResponse(BaseModel):
@@ -69,7 +86,7 @@ async def search_endpoint(
     query_emb = await embed_query(body.query)
     results = await hybrid_search(
         session, body.query, query_emb,
-        filters=body.filters.model_dump() if body.filters else None,
+        filters=await _resolve_filters(session, body),
         top_k=body.top_k,
     )
     return SearchResponse(
@@ -84,6 +101,7 @@ async def search_endpoint(
                     title=r.title,
                     channel=r.channel,
                 ),
+                start_time=r.start_time,
             )
             for r in results
         ],
@@ -94,6 +112,7 @@ async def search_endpoint(
 class AskRequest(BaseModel):
     query: str
     filters: SearchFilters | None = None
+    notebook_id: int | None = None
 
 
 class CitationSource(BaseModel):
@@ -101,6 +120,7 @@ class CitationSource(BaseModel):
     chunk_id: int
     chunk_text: str
     video: ChunkVideoInfo
+    start_time: float | None = None
 
 
 class AskResponse(BaseModel):
@@ -119,7 +139,7 @@ async def ask_endpoint(
     query_emb = await embed_query(body.query)
     raw_results = await hybrid_search(
         session, body.query, query_emb,
-        filters=body.filters.model_dump() if body.filters else None,
+        filters=await _resolve_filters(session, body),
         top_k=5,
     )
     search_latency = int((time.monotonic() - t0) * 1000)
@@ -157,6 +177,7 @@ async def ask_endpoint(
             chunk_id=r.chunk_id,
             chunk_text=r.chunk_text[:500],
             video=ChunkVideoInfo(youtube_id=r.youtube_id, title=r.title, channel=r.channel),
+            start_time=r.start_time,
         ))
 
     return AskResponse(
@@ -183,12 +204,13 @@ async def advanced_ask_endpoint(
     session: AsyncSession = Depends(get_session),
 ) -> AdvancedAskResponse:
     # Server-side timeout so a hung provider can never strand a request for minutes.
+    resolved_filters = await _resolve_filters(session, body)
     try:
         result = await asyncio.wait_for(
             multi_step_rag(
                 query=body.query,
                 session=session,
-                filters=body.filters.model_dump() if body.filters else None,
+                filters=resolved_filters,
             ),
             timeout=30,
         )
@@ -212,6 +234,7 @@ async def advanced_ask_endpoint(
                 title=s.get("title", ""),
                 channel=s.get("channel", ""),
             ),
+            start_time=s.get("start_time"),
         )
         for i, s in enumerate(result.get("sources", []))
     ]
