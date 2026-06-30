@@ -1,0 +1,16 @@
+Third-party data attribution
+============================
+
+unfoldingWord(R) translationWords (Telugu + English)
+----------------------------------------------------
+Portions of the translation glossary (GlossaryTerm rows seeded via
+backend/scripts/import_uw_glossary.py) are derived from unfoldingWord
+translationWords, a Biblical key-terms dictionary.
+
+- Source : https://www.unfoldingword.org/  (Door43 repos: te_tw, en_tw)
+- License: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+           https://creativecommons.org/licenses/by-sa/4.0/
+
+Because translationWords is licensed CC BY-SA 4.0, glossary data derived from it
+is likewise made available under CC BY-SA 4.0. "unfoldingWord" is a trademark of
+unfoldingWord; its use here does not imply endorsement.

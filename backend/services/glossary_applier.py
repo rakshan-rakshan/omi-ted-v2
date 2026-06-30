@@ -16,8 +16,14 @@ logger = logging.getLogger(__name__)
 class GlossaryApplier:
     """Pre-compiled glossary replacement engine."""
 
-    def __init__(self, terms: list[tuple[re.Pattern, str]]):
+    def __init__(
+        self,
+        terms: list[tuple[re.Pattern, str]],
+        raw: list[tuple[str, str, str]] | None = None,
+    ):
         self._terms = terms
+        # (te_term, en_term, category) — exposed for prompt-injection selection.
+        self.terms_raw: list[tuple[str, str, str]] = raw or []
 
     @classmethod
     async def from_db(cls, session) -> GlossaryApplier:
@@ -25,17 +31,20 @@ class GlossaryApplier:
             GlossaryTerm.__table__.select().where(GlossaryTerm.__table__.c.en_term.isnot(None))
         )
         terms: list[tuple[re.Pattern, str]] = []
+        raw: list[tuple[str, str, str]] = []
         for row in rows:
             te_term = row.te_term.strip()
-            en_term = row.en_term.strip()
+            en_term = (row.en_term or "").strip()
             if te_term and en_term:
                 try:
                     pattern = re.compile(re.escape(te_term), re.IGNORECASE)
-                    terms.append((pattern, en_term))
                 except re.error:
                     logger.warning("Skipping invalid glossary regex: %r", te_term)
+                    continue
+                terms.append((pattern, en_term))
+                raw.append((te_term, en_term, row.category or "general"))
         logger.info("GlossaryApplier loaded %d terms", len(terms))
-        return cls(terms)
+        return cls(terms, raw)
 
     def apply(self, text: str) -> str:
         """Apply all glossary replacements to *text*."""

@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import AsyncSessionLocal, get_session
 from models import Segment, TranslationCostLog, TranslationErrorLog, Video
 from services.glossary_applier import GlossaryApplier
+from services.glossary_prompt import hint_for_text
 from services.transcript import fetch_video
 from services.translate import CostMeter, translate, translate_batch
 from services.translation_cache import TranslationCache
@@ -200,6 +201,8 @@ async def translate_video_segments(
 
     # Glossary applier built once and reused (caller passes one per-run to avoid re-scanning).
     applier = glossary or await GlossaryApplier.from_db(session)
+    # Raw terms for prompt-injection (OpenRouter only — other providers take no prompt).
+    gloss_terms = applier.terms_raw if prov == "openrouter" else []
 
     # Dedup identical source texts within the video — common in sermons (refrains, "Amen", scripture).
     unique_texts = list({s.te_original for s in to_translate})
@@ -229,6 +232,7 @@ async def translate_video_segments(
                     try:
                         translations = await translate_batch(
                             chunk, src="te", tgt="en", model=model, meter=local_m,
+                            glossary_hint=hint_for_text("\n".join(chunk), gloss_terms),
                         )
                         pairs: list[tuple[str, str | None]] = []
                         for txt, en_raw in zip(chunk, translations):
@@ -265,6 +269,7 @@ async def translate_video_segments(
                             txt, src="te", tgt="en", provider=provider, model=model,
                             cache=TranslationCache(fs), meter=local_m,
                             read_cache=False, apply_glossary=False,
+                            glossary_hint=hint_for_text(txt, gloss_terms),
                         )
                         return txt, (applier.apply(en) if en else None), local_m, None
                     except Exception as exc:

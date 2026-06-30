@@ -125,13 +125,16 @@ async def _google(text: str, src: str, tgt: str, timeout: int) -> str:
             return r.json()["data"]["translations"][0]["translatedText"]
     return await _with_retry(_do)
 
-async def _openrouter(text: str, src: str, tgt: str, model: str, timeout: int) -> tuple[str, dict]:
+async def _openrouter(
+    text: str, src: str, tgt: str, model: str, timeout: int, glossary_hint: str = ""
+) -> tuple[str, dict]:
     key = os.environ.get("OPENROUTER_API_KEY", "")
     if not key:
         raise EnvironmentError("OPENROUTER_API_KEY not set. Add it in Settings.")
     prompt = (
         f"Translate this Telugu Christian sermon text to English. "
-        f"Preserve theological terms accurately. Output only the translation.\n\n{text}"
+        f"Preserve theological terms accurately. Output only the translation."
+        f"{glossary_hint}\n\n{text}"
     )
     async def _do() -> tuple[str, dict]:
         async with httpx.AsyncClient(timeout=timeout) as c:
@@ -172,6 +175,7 @@ async def translate(
     *,
     read_cache: bool = True,
     apply_glossary: bool = True,
+    glossary_hint: str = "",
 ) -> str:
     if not text or not text.strip():
         return ""
@@ -195,7 +199,7 @@ async def translate(
             meter.calls += 1
             meter.provider = "sarvam"
     elif p == "openrouter":
-        result, usage = await _openrouter(text, src, tgt, m, t)
+        result, usage = await _openrouter(text, src, tgt, m, t, glossary_hint)
         if meter:
             meter.prompt_tokens += usage["prompt_tokens"]
             meter.completion_tokens += usage["completion_tokens"]
@@ -215,7 +219,7 @@ async def translate(
                     meter.calls += 1
                     meter.provider = "sarvam"
             else:
-                result, usage = await _openrouter(text, src, tgt, m, t)
+                result, usage = await _openrouter(text, src, tgt, m, t, glossary_hint)
                 if meter:
                     meter.prompt_tokens += usage["prompt_tokens"]
                     meter.completion_tokens += usage["completion_tokens"]
@@ -252,6 +256,7 @@ async def translate_batch(
     tgt: str = "en",
     model: str | None = None,
     meter: "CostMeter | None" = None,
+    glossary_hint: str = "",
 ) -> list[str]:
     """Pack N texts into one OpenRouter call. Falls back to per-segment on alignment failure."""
     if not texts:
@@ -269,7 +274,8 @@ async def translate_batch(
         f"Translate each numbered Telugu Christian sermon segment to English. "
         f"Return EXACTLY {len(texts)} lines, each starting with 'N. ' where N matches the input number. "
         f"Preserve all Biblical names, theological terms, scripture references exactly. "
-        f"Output only the numbered translations.\n\n{numbered}"
+        f"Output only the numbered translations."
+        f"{glossary_hint}\n\n{numbered}"
     )
 
     async def _do() -> tuple[str, dict]:
@@ -312,7 +318,7 @@ async def translate_batch(
     results = []
     for txt in texts:
         m_single = CostMeter()
-        r = await translate(txt, src=src, tgt=tgt, provider="openrouter", model=model, meter=m_single)
+        r = await translate(txt, src=src, tgt=tgt, provider="openrouter", model=model, meter=m_single, glossary_hint=glossary_hint)
         if meter:
             meter.accumulate(m_single)
         results.append(r)

@@ -185,15 +185,17 @@ async def create_term(
     return _to_response(term)
 
 
-@router.post("/glossary/bulk", response_model=GlossaryBulkResponse)
-async def bulk_upsert(
-    body: GlossaryBulkRequest,
-    session: AsyncSession = Depends(get_session),
-) -> GlossaryBulkResponse:
-    """Upsert many terms at once (one-click 'save selected'). Merges meanings into
-    existing terms (union, primary preserved); creates new ones otherwise."""
+async def apply_bulk(
+    session: AsyncSession, items: list[GlossaryBulkItem]
+) -> tuple[int, int, int]:
+    """Upsert many glossary terms; returns (created, updated, skipped).
+
+    Merges meanings into existing terms (union, primary preserved); creates new
+    ones otherwise. Shared by the HTTP handler and the seed import scripts so the
+    upsert/merge logic lives in exactly one place.
+    """
     created = updated = skipped = 0
-    for item in body.terms:
+    for item in items:
         te_term = item.te_term.strip()
         meanings = _clean_meanings(item.meanings)
         if not te_term or not meanings:
@@ -225,6 +227,17 @@ async def bulk_upsert(
             ))
             created += 1
     await session.commit()
+    return created, updated, skipped
+
+
+@router.post("/glossary/bulk", response_model=GlossaryBulkResponse)
+async def bulk_upsert(
+    body: GlossaryBulkRequest,
+    session: AsyncSession = Depends(get_session),
+) -> GlossaryBulkResponse:
+    """Upsert many terms at once (one-click 'save selected'). Merges meanings into
+    existing terms (union, primary preserved); creates new ones otherwise."""
+    created, updated, skipped = await apply_bulk(session, body.terms)
     return GlossaryBulkResponse(created=created, updated=updated, skipped=skipped)
 
 
