@@ -41,6 +41,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Shared-secret gate for the public deployment. When BACKEND_API_KEY is set
+# (prod/box), every request except /health and CORS preflight must carry a
+# matching X-Backend-Key header — injected server-side by the Vercel proxy
+# route so it never reaches the browser. Unset (local dev) => no enforcement.
+_API_KEY = os.getenv("BACKEND_API_KEY", "").strip()
+
+
+@app.middleware("http")
+async def _require_backend_key(request, call_next):
+    if _API_KEY and request.method != "OPTIONS" and request.url.path != "/health":
+        if request.headers.get("x-backend-key") != _API_KEY:
+            from fastapi.responses import JSONResponse
+
+            return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    return await call_next(request)
+
+
 app.include_router(health.router)
 app.include_router(ingest.router,       prefix="/api/v1/ingest", tags=["ingest"])
 app.include_router(dashboard.router,    prefix="/api/v1/ingest", tags=["dashboard"])
