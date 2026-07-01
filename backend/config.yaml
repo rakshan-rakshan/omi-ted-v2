@@ -2,7 +2,7 @@
 # Provider is a config swap, never a code change. See backend/services/llm_router.py (M5).
 llm:
   provider: openrouter    # sarvam | google | openrouter | indictrans2 (config swap, no code change)
-  model: anthropic/claude-haiku-4.5   # OpenRouter slug; swap freely (google/gemini-3.5-flash, openai/gpt-4o-mini, ...)
+  model: google/gemma-4-31b-it:free   # FREE OpenRouter model only — no paid models for translation. Swap among ":free" slugs.
   timeout_s: 60
   cache: true             # skip API call if same te_text already translated
   retry_attempts: 4       # transient-error retries (429/5xx/timeout) before giving up

@@ -23,7 +23,28 @@ if _raw_db_url.startswith("postgresql://"):
     _raw_db_url = _raw_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 DATABASE_URL = _raw_db_url
 
-engine = create_async_engine(DATABASE_URL, echo=False, future=True)
+_is_sqlite = DATABASE_URL.startswith("sqlite")
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=False,
+    future=True,
+    # SQLite: wait up to 30s for a write lock instead of failing instantly.
+    connect_args={"timeout": 30} if _is_sqlite else {},
+)
+
+if _is_sqlite:
+    from sqlalchemy import event
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _sqlite_pragmas(dbapi_conn, _record):
+        # WAL lets readers and a writer coexist; busy_timeout makes concurrent
+        # writers wait for the lock rather than raising "database is locked"
+        # (the source of 500s under concurrent translation runs).
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA journal_mode=WAL")
+        cur.execute("PRAGMA busy_timeout=30000")
+        cur.execute("PRAGMA synchronous=NORMAL")
+        cur.close()
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,

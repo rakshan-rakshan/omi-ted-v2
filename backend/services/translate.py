@@ -182,7 +182,7 @@ async def translate(
     cfg = _cfg()
     llm = cfg.get("llm", {})
     p = provider or llm.get("provider", "openrouter")
-    m = model or llm.get("model", "google/gemma-3-27b-it")
+    m = model or llm.get("model", "google/gemma-4-31b-it:free")
     t = llm.get("timeout_s", 30)
 
     # Check cache (skipped on forced re-translation via read_cache=False)
@@ -263,7 +263,7 @@ async def translate_batch(
         return []
     cfg = _cfg()
     llm = cfg.get("llm", {})
-    m = model or llm.get("model", "google/gemma-3-27b-it")
+    m = model or llm.get("model", "google/gemma-4-31b-it:free")
     t = llm.get("timeout_s", 30)
     key = os.environ.get("OPENROUTER_API_KEY", "")
     if not key:

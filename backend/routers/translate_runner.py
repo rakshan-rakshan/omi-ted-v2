@@ -202,7 +202,7 @@ async def start_translate_run(body: TranslateRunRequest) -> dict:
     llm = cfg.get("llm", {})
     trun = cfg.get("translate_run", {})
     provider = body.provider or llm.get("provider", "openrouter")
-    model = body.model or llm.get("model", "google/gemma-3-27b-it")
+    model = body.model or llm.get("model", "google/gemma-4-31b-it:free")
     concurrency = body.concurrency or int(llm.get("concurrency", 5))
     batch_size = body.batch_size or int(llm.get("batch_size", 1))
     video_concurrency = body.video_concurrency or int(trun.get("video_concurrency", 2))

@@ -5,7 +5,7 @@ POST /api/v1/batch/translate
   {
     "youtube_id": "...",
     "provider": "youtube | sarvam | openrouter",
-    "model": "google/gemma-3-27b-it",   // OpenRouter only
+    "model": "google/gemma-4-31b-it:free",   // OpenRouter (free only)
     "force": false,
     "concurrency": 5
   }
@@ -56,7 +56,7 @@ router = APIRouter(tags=["batch"])
 class TranslateRequest(BaseModel):
     youtube_id: str
     provider: str = "openrouter"          # youtube | sarvam | openrouter
-    model: str = "google/gemma-3-27b-it"  # OpenRouter model ID
+    model: str = "google/gemma-4-31b-it:free"  # OpenRouter model ID (free only)
     force: bool = False
     concurrency: int = 5
     segment_ids: list[int] | None = None  # If provided, only translate these segments
@@ -76,7 +76,7 @@ async def translate_video_segments(
     *,
     session: AsyncSession,
     provider: str | None = "openrouter",
-    model: str | None = "google/gemma-3-27b-it",
+    model: str | None = "google/gemma-4-31b-it:free",
     force: bool = False,
     concurrency: int = 5,
     batch_size: int = 1,
@@ -299,25 +299,30 @@ async def translate_video_segments(
     await session.commit()
 
     # 4) Record cost + error logs in a fresh session (never reuse session after commit).
+    #    Non-fatal: the translation already committed above, so a logging hiccup
+    #    (e.g. a transient DB lock) must never fail the request.
     if translated_count > 0 or video_meter.cost_usd > 0 or error_records:
-        async with AsyncSessionLocal() as cost_session:
-            if translated_count > 0 or video_meter.cost_usd > 0:
-                cost_session.add(TranslationCostLog(
-                    video_id=video.id, run_id=run_id, provider=video_meter.provider,
-                    model=video_meter.model or model, segments=translated_count,
-                    prompt_tokens=video_meter.prompt_tokens,
-                    completion_tokens=video_meter.completion_tokens,
-                    cost_usd=round(video_meter.cost_usd, 8),
-                ))
-            for er in error_records:
-                cost_session.add(TranslationErrorLog(
-                    video_id=video.id, youtube_id=video.youtube_id, run_id=run_id,
-                    provider=video_meter.provider, model=video_meter.model or model,
-                    segment_index=er["segment_index"], error_type=er["error_type"],
-                    error_msg=er["error_msg"], source_text=er["source_text"],
-                    cost_usd=round(video_meter.cost_usd, 8),
-                ))
-            await cost_session.commit()
+        try:
+            async with AsyncSessionLocal() as cost_session:
+                if translated_count > 0 or video_meter.cost_usd > 0:
+                    cost_session.add(TranslationCostLog(
+                        video_id=video.id, run_id=run_id, provider=video_meter.provider,
+                        model=video_meter.model or model, segments=translated_count,
+                        prompt_tokens=video_meter.prompt_tokens,
+                        completion_tokens=video_meter.completion_tokens,
+                        cost_usd=round(video_meter.cost_usd, 8),
+                    ))
+                for er in error_records:
+                    cost_session.add(TranslationErrorLog(
+                        video_id=video.id, youtube_id=video.youtube_id, run_id=run_id,
+                        provider=video_meter.provider, model=video_meter.model or model,
+                        segment_index=er["segment_index"], error_type=er["error_type"],
+                        error_msg=er["error_msg"], source_text=er["source_text"],
+                        cost_usd=round(video_meter.cost_usd, 8),
+                    ))
+                await cost_session.commit()
+        except Exception as exc:
+            logger.warning("cost/error log write failed (non-fatal): %s", exc)
 
     return {
         "translated": translated_count,
@@ -364,15 +369,24 @@ async def batch_translate(
             message=f"Applied {counts['translated']} YouTube auto-translations to en_final.",
         )
 
-    counts = await translate_video_segments(
-        video,
-        session=session,
-        provider=body.provider,
-        model=body.model,
-        force=body.force,
-        concurrency=body.concurrency,
-        segment_ids=body.segment_ids,
-    )
+    try:
+        counts = await translate_video_segments(
+            video,
+            session=session,
+            provider=body.provider,
+            model=body.model,
+            force=body.force,
+            concurrency=body.concurrency,
+            segment_ids=body.segment_ids,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Translate failed for %s via %s: %s", body.youtube_id, body.provider, exc)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Translation failed ({body.provider}): {exc}",
+        ) from exc
     translated_count = counts["translated"]
     skipped = counts["skipped"]
     error_count = counts["errors"]
