@@ -1,5 +1,7 @@
 # OMI-TED v2 — Cloud Deploy (Railway, always-on, auto-deploy)
 
+> Prefer a self-hosted box + Vercel instead? See [`DEPLOY-HETZNER.md`](DEPLOY-HETZNER.md).
+
 Goal: zero local dev. Push to `main` → Railway redeploys both services. No `uvicorn`, no `npm run dev` ever again.
 
 Architecture on Railway, one project, three services:

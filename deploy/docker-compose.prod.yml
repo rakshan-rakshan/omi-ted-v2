@@ -1,0 +1,49 @@
+# Production stack for a SHARED box: Postgres(pgvector) + backend ONLY.
+# Frontend runs on Vercel. Postgres is NOT published (private compose network).
+# Backend is published on 127.0.0.1:8000 so a HOST reverse proxy (Caddy) can front it.
+#
+#   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
+#
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: omitred
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?set PG_PASSWORD in deploy/.env}
+      POSTGRES_DB: omitred
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U omitred"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    # No `ports:` on purpose — Postgres stays private on the compose network.
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    env_file: .env                       # OPENROUTER_API_KEY, SARVAM_API_KEY, GOOGLE_API_KEY, ALLOWED_ORIGINS, PG_PASSWORD
+    environment:
+      DATABASE_URL: postgresql+asyncpg://omitred:${PG_PASSWORD}@postgres:5432/omitred
+      EMBEDDER_MODEL: intfloat/multilingual-e5-base   # 768-dim — MUST match Vector(768)
+      SENTENCE_TRANSFORMERS_HOME: /app/models
+      PYTHONPATH: /app
+    # Override the Dockerfile CMD: --workers 1 (the embedding model loads PER worker,
+    # ~1.3GB each; with ~3GB free, run ONE). alembic upgrade head creates schema +
+    # `CREATE EXTENSION vector` + HNSW index on first boot.
+    command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1"
+    volumes:
+      - modelcache:/app/models           # persist the ~1GB HF model across restarts
+    ports:
+      - "127.0.0.1:8000:8000"            # localhost only — host proxy fronts it, never public directly
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  modelcache:

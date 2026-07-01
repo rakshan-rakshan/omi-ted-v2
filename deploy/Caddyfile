@@ -1,0 +1,20 @@
+# Caddy reverse proxy + automatic HTTPS for the backend.
+# Point a DNS A record  api.yourdomain.com -> your box's public IP  first.
+#
+# If the box ALREADY runs a reverse proxy (nginx/Traefik/another Caddy), do NOT
+# run this — just add an equivalent vhost there proxying to 127.0.0.1:8000.
+#
+#   caddy run --config deploy/Caddyfile      (or install as a service)
+
+api.yourdomain.com {
+    encode gzip
+    reverse_proxy 127.0.0.1:8000
+
+    # ── Optional but recommended: shared-secret gate ──
+    # The backend has no built-in auth. Require a secret header that ONLY your
+    # Vercel proxy route sends (see DEPLOY.md "Secure the public backend").
+    # Uncomment and set the same value as BACKEND_API_KEY in Vercel:
+    #
+    # @unauth not header X-Backend-Key "REPLACE_WITH_A_LONG_RANDOM_STRING"
+    # respond @unauth "forbidden" 403
+}

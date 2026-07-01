@@ -9,6 +9,9 @@ backend/dev.db-journal
 backend/dev.db-shm
 backend/dev.db-wal
 
+# Deploy secrets — never commit real values (deploy/.env.prod.example is the template)
+deploy/.env
+
 # Node
 frontend/node_modules/
 frontend/.next/
