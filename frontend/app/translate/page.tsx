@@ -223,12 +223,31 @@ export default function TranslatePage() {
 
   // ── Shared card helper ─────────────────────────────────────────────────────
 
-  const card = (label: string, value: number | string, color = "var(--ink)") => (
-    <div style={{ flex: "1 1 130px", minWidth: 120, background: "var(--white)", border: "1px solid var(--warm-200)", borderRadius: 12, padding: "14px 16px", boxShadow: "var(--shadow-card)" }}>
-      <p style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
-      <p style={{ fontSize: 24, fontWeight: 700, color, fontFamily: "JetBrains Mono", marginTop: 4 }}>{typeof value === "number" ? value.toLocaleString() : value}</p>
-    </div>
-  );
+  const card = (
+    label: string,
+    value: number | string,
+    color = "var(--ink)",
+    opts: { big?: boolean; sub?: string } = {},
+  ) => {
+    const text = typeof value === "number" ? value.toLocaleString() : value;
+    // Hero card (big) is prominent; the rest are compact. Font shrinks for long strings.
+    const len = String(text).length;
+    const valueSize = opts.big
+      ? (len <= 11 ? 30 : len <= 16 ? 26 : 22)
+      : (len <= 7 ? 19 : len <= 11 ? 16 : 14);
+    return (
+      <div style={{
+        flex: opts.big ? "2 1 250px" : "1 1 120px",
+        minWidth: opts.big ? 230 : 108,
+        background: "var(--white)", border: "1px solid var(--warm-200)", borderRadius: 12,
+        padding: opts.big ? "16px 20px" : "12px 14px", boxShadow: "var(--shadow-card)", overflow: "hidden",
+      }}>
+        <p style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</p>
+        <p style={{ fontSize: valueSize, fontWeight: 700, color, fontFamily: "JetBrains Mono", marginTop: 4, lineHeight: 1.2, overflowWrap: "break-word" }}>{text}</p>
+        {opts.sub && <p style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "JetBrains Mono", marginTop: 2 }}>{opts.sub}</p>}
+      </div>
+    );
+  };
 
   const etaStr = eta();
 
@@ -246,11 +265,11 @@ export default function TranslatePage() {
       </div>
 
       {/* ── SECTION 1: Headline stats ───────────────────────────────────────── */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "stretch" }}>
+        {card("Segs done", tr ? `${tr.translated_segments.toLocaleString()} / ${tr.total_segments.toLocaleString()}` : "—", "var(--gold)", { big: true, sub: tr ? `${tr.percent}% done` : undefined })}
         {card("Translated", tr?.translated_videos ?? "—", "var(--green)")}
         {card("Partial", tr?.partial_videos ?? "—", "var(--gold)")}
         {card("Untranslated", tr?.untranslated_videos ?? "—", "var(--ink-3)")}
-        {card("Segs done", tr ? `${tr.translated_segments.toLocaleString()}/${tr.total_segments.toLocaleString()}` : "—", "var(--gold)")}
         {card("Total cost", overview != null ? `$${overview.total_cost_usd.toFixed(4)}` : "—", "var(--ink)")}
         {card("Cache saved", overview != null ? `$${overview.cache_saved_usd.toFixed(4)}` : "—", "var(--green)")}
       </div>
@@ -430,10 +449,9 @@ export default function TranslatePage() {
                           ⇄
                         </button>
                         <button onClick={() => { setRemoveId(r.youtube_id); setRemoveTitle(r.title); }}
-                          style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-4)", background: "none", border: "none", cursor: "pointer" }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--red)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--ink-4)")}>
-                          Remove
+                          title="Move to Recycle Bin"
+                          style={{ fontSize: 12, fontWeight: 600, color: "var(--red)", background: "none", border: "none", cursor: "pointer" }}>
+                          🗑 Remove
                         </button>
                       </div>
                     </td>

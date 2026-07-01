@@ -210,10 +210,9 @@ export default function Dashboard() {
                         )}
                         {r.status !== "not_attempted" && (
                           <button onClick={() => { setRemoveId(r.youtube_id); setRemoveTitle(r.title); }}
-                            style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-4)", background: "none", border: "none", cursor: "pointer" }}
-                            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--red)")}
-                            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--ink-4)")}>
-                            Remove
+                            title="Move to Recycle Bin"
+                            style={{ fontSize: 12, fontWeight: 600, color: "var(--red)", background: "none", border: "none", cursor: "pointer" }}>
+                            🗑 Remove
                           </button>
                         )}
                       </div>

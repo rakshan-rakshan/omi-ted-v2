@@ -88,7 +88,7 @@ export default function RemovedPage() {
 
       {/* Page title */}
       <div>
-        <h1 className="font-display" style={{ fontSize: 26, color: "var(--ink)", letterSpacing: "-0.01em" }}>Removed</h1>
+        <h1 className="font-display" style={{ fontSize: 26, color: "var(--ink)", letterSpacing: "-0.01em" }}>Recycle Bin</h1>
         <p style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 4 }}>
           Videos removed from ingest or translation. Restore them or delete permanently.
         </p>

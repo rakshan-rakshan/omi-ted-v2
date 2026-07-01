@@ -11,7 +11,7 @@ const NAV = [
   { href: "/dashboard",icon: "▦", label: "Ingest",     labelTe: "సేకరణ",      desc: "Bulk dashboard",    descTe: "బల్క్ డాష్‌బోర్డ్" },
   { href: "/translate",icon: "⇄", label: "Translate",  labelTe: "అనువదించు",  desc: "Translation control",descTe: "అనువాద నియంత్రణ" },
   { href: "/errors",   icon: "⚠", label: "Errors",     labelTe: "లోపాలు",     desc: "Ingest & translation",descTe: "సేకరణ & అనువాదం" },
-  { href: "/removed",  icon: "🗑", label: "Removed",    labelTe: "తొలగించినవి", desc: "Recycle bin",       descTe: "రీసైకిల్ బిన్" },
+  { href: "/removed",  icon: "🗑", label: "Recycle Bin", labelTe: "రీసైకిల్ బిన్", desc: "Removed videos", descTe: "తొలగించిన వీడియోలు" },
   { href: "/upload",   icon: "↑", label: "Upload",     labelTe: "అప్‌లోడ్",   desc: "Import documents",  descTe: "పత్రాలను దిగుమతి చేయండి" },
   { href: "/search",   icon: "⌕", label: "Search",     labelTe: "శోధన",       desc: "Find & ask",        descTe: "కనుగొని అడగండి" },
   { href: "/queue",    icon: "✎", label: "Work Queue", labelTe: "పని వరుస",   desc: "Needs your edit",   descTe: "మీ సవరణ అవసరం" },
