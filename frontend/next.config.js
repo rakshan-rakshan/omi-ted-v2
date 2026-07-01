@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "standalone",
+  // Standalone output is for the Docker/box build. Vercel manages its own output —
+  // setting standalone there breaks routing (every route 404s), so skip it on Vercel.
+  output: process.env.VERCEL ? undefined : "standalone",
   /**
    * Proxy /api/* → backend.
    * Locally: http://localhost:3001
