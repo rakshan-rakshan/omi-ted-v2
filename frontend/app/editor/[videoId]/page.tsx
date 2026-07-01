@@ -27,17 +27,16 @@ interface SegmentsPage {
   total: number; page: number; page_size: number; total_pages: number; items: Segment[];
 }
 interface TranslateResult { translated: number; skipped: number; errors: number; message: string; }
+interface ModelOption {
+  provider: string; model: string | null; label: string; free: boolean;
+  prompt_per_mtok?: number; completion_per_mtok?: number; inr_per_char?: number; unit: string;
+}
+interface ModelsResp { options: ModelOption[] }
 
 type Provider = "youtube" | "sarvam" | "openrouter";
 type EditorMode = "fulltext" | "sentences" | "finetune";
 
-const PRESETS = [
-  { id: "google/gemma-3-27b-it",                   label: "Gemma 3 · 27B" },
-  { id: "google/gemma-3-12b-it",                   label: "Gemma 3 · 12B" },
-  { id: "anthropic/claude-3-haiku",                label: "Claude 3 Haiku" },
-  { id: "meta-llama/llama-3.3-70b-instruct",       label: "Llama 3.3 · 70B" },
-  { id: "custom",                                  label: "Custom model…" },
-];
+// OpenRouter model list comes from GET /api/v1/models (the full catalog), same as the Translate page.
 
 const fetcher = (u: string) => axios.get(u).then(r => r.data);
 const PAGE_SIZE = 50;
@@ -458,7 +457,7 @@ export default function EditorPage() {
   const [mode, setMode] = useState<EditorMode>("sentences");
   const [page, setPage] = useState(1);
   const [provider, setProvider] = useState<Provider>("sarvam");
-  const [modelPreset, setModelPreset] = useState(PRESETS[0].id);
+  const [modelPreset, setModelPreset] = useState("google/gemma-4-31b-it:free");
   const [customModel, setCustomModel] = useState("");
   const [translating, setTranslating] = useState(false);
   const [txResult, setTxResult] = useState<TranslateResult | null>(null);
@@ -477,14 +476,12 @@ export default function EditorPage() {
     const p = localStorage.getItem("omi_provider") as Provider | null;
     const m = localStorage.getItem("omi_model");
     if (p) setProvider(p);
-    if (m) {
-      const pr = PRESETS.find(x => x.id === m);
-      if (pr) setModelPreset(m);
-      else { setModelPreset("custom"); setCustomModel(m); }
-    }
+    if (m) setModelPreset(m);
   }, []);
 
   const activeModel = modelPreset === "custom" ? customModel : modelPreset;
+  const { data: models } = useSWR<ModelsResp>("/api/v1/models", fetcher, { revalidateOnFocus: false });
+  const orModels = (models?.options ?? []).filter((o) => o.provider === "openrouter");
 
   const { data, error, isLoading, mutate } = useSWR<SegmentsPage>(
     `/api/v1/videos/${videoId}/segments?page=${page}&page_size=${PAGE_SIZE}`, fetcher
@@ -684,8 +681,21 @@ export default function EditorPage() {
           {provider === "openrouter" && (
             <select value={modelPreset}
               onChange={e => { setModelPreset(e.target.value); localStorage.setItem("omi_model", e.target.value); }}
-              style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--gray-200)", fontSize: 11, color: "var(--gray-600)", background: "var(--white)", outline: "none" }}>
-              {PRESETS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+              style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--gray-200)", fontSize: 11, color: "var(--gray-600)", background: "var(--white)", outline: "none", maxWidth: 220 }}>
+              {modelPreset !== "custom" && !orModels.some(o => o.model === modelPreset) && (
+                <option value={modelPreset}>{modelPreset}</option>
+              )}
+              {orModels.some(o => o.free) && (
+                <optgroup label="Free">
+                  {orModels.filter(o => o.free).map(o => <option key={o.model ?? o.label} value={o.model ?? ""}>{o.label}</option>)}
+                </optgroup>
+              )}
+              {orModels.some(o => !o.free) && (
+                <optgroup label="Paid ($/Mtok in·out)">
+                  {orModels.filter(o => !o.free).map(o => <option key={o.model ?? o.label} value={o.model ?? ""}>{o.label} — ${o.prompt_per_mtok}·${o.completion_per_mtok}</option>)}
+                </optgroup>
+              )}
+              <option value="custom">Custom model…</option>
             </select>
           )}
           {provider === "openrouter" && modelPreset === "custom" && (
